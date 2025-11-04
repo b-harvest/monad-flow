@@ -1,22 +1,19 @@
 package monad
 
 import (
-	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
+	"monad-flow/pkg/debug"
 	"monad-flow/pkg/packet"
-
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var defaultProcessor = newPacketProcessor()
-var (
-	ErrNotEnoughSymbols     = errors.New("not enough symbols to decode the message")
-	ErrInconsistentMetadata = errors.New("chunks have inconsistent AppMessageLen or Payload size")
-)
 
-// -----------------------------------------------------------------------------------
+type raptorQDecoder struct {
+	dataLength   uint32
+	symbols      map[uint16][]byte
+	sourceSymNum uint32
+}
 
 type messageReassembler struct {
 	AppMessageID string
@@ -24,77 +21,8 @@ type messageReassembler struct {
 	IsComplete   bool
 }
 
-func newReassembler(appMessageID string, appMessageLen uint32, symbolSize int) (*messageReassembler, error) {
-	decoder, err := newRaptorQDecoder(appMessageLen, symbolSize)
-	if err != nil {
-		return nil, err
-	}
-	return &messageReassembler{
-		AppMessageID: appMessageID,
-		Decoder:      decoder,
-		IsComplete:   false,
-	}, nil
-}
-
-// -----------------------------------------------------------------------------------
-
-type raptorQDecoder struct {
-	dataLength        uint32
-	symbolSize        int
-	sourceSymbolCount uint32
-	symbols           map[uint16][]byte
-}
-
-func newRaptorQDecoder(dataLength uint32, symbolSize int) (*raptorQDecoder, error) {
-	if symbolSize == 0 {
-		return nil, errors.New("symbol size cannot be zero")
-	}
-	return &raptorQDecoder{
-		dataLength:        dataLength,
-		symbolSize:        symbolSize,
-		sourceSymbolCount: (dataLength + uint32(symbolSize) - 1) / uint32(symbolSize),
-		symbols:           make(map[uint16][]byte),
-	}, nil
-}
-
-func (d *raptorQDecoder) addChunk(chunk *packet.MonadPacketChunk) error {
-	if len(chunk.Payload) != d.symbolSize {
-		if chunk.ChunkID < uint16(d.sourceSymbolCount-1) {
-			return fmt.Errorf("%w: expected symbol size %d, but got %d for chunk %d",
-				ErrInconsistentMetadata, d.symbolSize, len(chunk.Payload), chunk.ChunkID)
-		}
-	}
-	if _, exists := d.symbols[chunk.ChunkID]; !exists {
-		d.symbols[chunk.ChunkID] = chunk.Payload
-	}
-	return nil
-}
-
-func (d *raptorQDecoder) decode() ([]byte, error) {
-	for i := uint32(0); i < d.sourceSymbolCount; i++ {
-		if _, ok := d.symbols[uint16(i)]; !ok {
-			return nil, fmt.Errorf("%w: missing source symbol with ChunkID %d", ErrNotEnoughSymbols, i)
-		}
-	}
-	var originalMessage bytes.Buffer
-	for i := uint32(0); i < d.sourceSymbolCount; i++ {
-		originalMessage.Write(d.symbols[uint16(i)])
-	}
-	return originalMessage.Bytes()[:d.dataLength], nil
-}
-
-// -----------------------------------------------------------------------------------
-
 type packetProcessor struct {
 	reassemblers map[string]*messageReassembler
-}
-
-type decodedRouterMessage struct {
-	_                  struct{} `rlp:"-"`
-	SerializeVersion   uint32
-	CompressionVersion uint8
-	MessageType        uint8
-	Payload            []byte
 }
 
 func newPacketProcessor() *packetProcessor {
@@ -103,87 +31,11 @@ func newPacketProcessor() *packetProcessor {
 	}
 }
 
-func (p *packetProcessor) processChunk(chunk *packet.MonadPacketChunk) ([]byte, error) {
-	// 1. AppMessageHash를 캐시의 키로 사용합니다.
-	appMessageIDHex := fmt.Sprintf("%x", chunk.AppMessageHash)
-
-	// 2. 캐시(Map)에서 해당 메시지의 재조합기(reassembler)를 찾거나 새로 생성합니다.
-	reassembler, exists := p.reassemblers[appMessageIDHex]
-	if !exists {
-		// 이 메시지의 첫 번째 청크인 경우, 새로운 재조합기를 생성합니다.
-		fmt.Printf("✨ [Cache] New message detected [AppMsgID: %s]. Creating reassembler.\n", appMessageIDHex)
-		symbolSize := len(chunk.Payload)
-		var err error
-		reassembler, err = newReassembler(appMessageIDHex, chunk.AppMessageLen, symbolSize)
-		if err != nil {
-			return nil, err
-		}
-		p.reassemblers[appMessageIDHex] = reassembler
-	}
-
-	// 이미 완성된 메시지의 중복 청크는 무시합니다.
-	if reassembler.IsComplete {
-		return nil, nil
-	}
-
-	// 3. 디코더에 현재 청크(심볼)를 추가합니다.
-	if err := reassembler.Decoder.addChunk(chunk); err != nil {
-		return nil, err
-	}
-
-	// 4. RaptorQ 디코딩을 시도합니다.
-	reconstructedRLP, err := reassembler.Decoder.decode()
-	if err != nil {
-		if errors.Is(err, ErrNotEnoughSymbols) {
-			// 아직 더 많은 청크가 필요합니다.
-			return nil, nil
-		}
-		// 다른 디코딩 오류 발생
-		return nil, err
-	}
-
-	// 5. 디코딩 성공!
-	reassembler.IsComplete = true
-	// 처리가 끝난 메시지는 캐시에서 삭제하여 메모리를 관리합니다.
-	defer delete(p.reassemblers, appMessageIDHex)
-
-	// 6. 최종 RLP 역직렬화를 통해 실제 페이로드를 추출하고 반환합니다.
-	var routerMsg decodedRouterMessage
-	err = rlp.Decode(bytes.NewReader(reconstructedRLP), &[]interface{}{
-		&routerMsg.SerializeVersion,
-		&routerMsg.CompressionVersion,
-		&routerMsg.MessageType,
-		&routerMsg.Payload,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("final rlp decoding failed: %w", err)
-	}
-
-	return routerMsg.Payload, nil
-}
-
-func (p *packetProcessor) processPacket(data []byte) {
-	packet, err := parseMonadPacket(data)
-	if err != nil {
-		fmt.Println("chunk parsing failed: %w", err)
-		return
-	}
-	// debug.PrintMonadPacketDetails(packet)
-	finalPayload, err := p.processChunk(packet)
-
-	if err != nil {
-		fmt.Printf("‼️  Error processing chunk: %v\n", err)
-		return
-	}
-
-	// 5. 결과를 확인합니다.
-	if finalPayload != nil {
-		// 메시지가 성공적으로 재조합되었습니다!
-		fmt.Println("✅ MESSAGE RECONSTRUCTED!")
-		fmt.Printf("   Final Decoded Payload(First 10B): %x...\n", finalPayload[:min(10, len(finalPayload))])
-	} else {
-		// 아직 더 많은 패킷이 필요합니다.
-		fmt.Println("⏳ Message incomplete, waiting for more chunks...")
+func newRaptorQDecoder(dataLength uint32, symbolSize int) *raptorQDecoder {
+	return &raptorQDecoder{
+		dataLength:   dataLength,
+		symbols:      make(map[uint16][]byte),
+		sourceSymNum: (dataLength + uint32(symbolSize) - 1) / uint32(symbolSize),
 	}
 }
 
@@ -192,6 +44,30 @@ func (p *packetProcessor) processPacket(data []byte) {
 func HexDumpAndReassemble(data []byte) {
 	fmt.Printf("\n---[ Packet Received by Parser (%d bytes) ]---\n", len(data))
 	defaultProcessor.processPacket(data)
+}
+
+func (p *packetProcessor) processPacket(data []byte) {
+	packet, err := parseMonadPacket(data)
+	if err != nil {
+		fmt.Println("chunk parsing failed: %w", err)
+		return
+	}
+	debug.PrintMonadPacketDetails(packet)
+	appMessageHash := fmt.Sprintf("%x", packet.AppMessageHash)
+	reassembler, exists := p.reassemblers[appMessageHash]
+
+	if !exists {
+		payloadSize := len(packet.Payload)
+		if payloadSize == 0 {
+			fmt.Println("received a chunk with zero-length symbol data")
+			return
+		}
+		reassembler = &messageReassembler{
+			AppMessageID: appMessageHash,
+			Decoder:      newRaptorQDecoder(packet.AppMessageLen, payloadSize),
+		}
+		p.reassemblers[appMessageHash] = reassembler
+	}
 }
 
 func parseMonadPacket(data []byte) (*packet.MonadPacketChunk, error) {
