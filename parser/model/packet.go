@@ -1,6 +1,10 @@
 package packet
 
-type MonadPacketChunk struct {
+import (
+	"github.com/google/gopacket/layers"
+)
+
+type MonadChunkPacket struct {
 	// 헤더 (Signature 이후)
 	Signature       [65]byte // Signature of sender
 	Version         uint16   // 2 bytes
@@ -18,4 +22,12 @@ type MonadPacketChunk struct {
 	Reserved          byte     // 1 byte
 	ChunkID           uint16   // 2 bytes (u16)
 	Payload           []byte   // rest of data
+}
+
+type Packet struct {
+	EthernetLayer *layers.Ethernet
+	IPv4Layer     *layers.IPv4
+	TCPLayer      *layers.TCP
+	UDPLayer      *layers.UDP
+	Payload       []byte
 }

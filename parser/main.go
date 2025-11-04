@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"monad-flow/internal/bpf"
-	"monad-flow/internal/network"
+	"monad-flow/parser"
+	"monad-flow/util"
 
 	"github.com/cilium/ebpf/ringbuf"
 )
@@ -20,7 +20,7 @@ func main() {
 	}
 	ifName := os.Args[1]
 
-	monitor, err := bpf.NewBPFMonitor(ifName)
+	monitor, err := util.NewBPFMonitor(ifName)
 	if err != nil {
 		log.Fatalf("Failed to initialize eBPF monitor: %v", err)
 	}
@@ -62,9 +62,13 @@ func main() {
 			if dumpLen > len(pktData) {
 				dumpLen = len(pktData)
 			}
-
-			// fmt.Printf("\n--- Packet Received (RealLength: %d bytes, DumpLength: %d bytes) ---\n", realLen, dumpLen)
-			network.ParseAndDumpPacket(pktData[:dumpLen])
+			packet := parser.ParsePacket(pktData[:dumpLen])
+			chunk, err := parser.ParseMonadChunkPacket(packet.Payload)
+			if err != nil {
+				log.Printf("Chunk parsing failed: %v (data len: %d)", err, len(packet.Payload))
+				return
+			}
+			util.PrintMonadPacketDetails(chunk)
 		}
 	}()
 

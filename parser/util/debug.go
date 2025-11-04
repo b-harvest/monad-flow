@@ -1,12 +1,13 @@
-package debug
+package util
 
 import (
 	"bytes"
 	"fmt"
-	"monad-flow/pkg/packet"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+
+	packet "monad-flow/model"
 )
 
 func HexDump(data []byte) {
@@ -56,7 +57,7 @@ func HexDump(data []byte) {
 	}
 }
 
-func PrintMonadPacketDetails(packet *packet.MonadPacketChunk) {
+func PrintMonadPacketDetails(packet *packet.MonadChunkPacket) {
 	isBroadcast := (packet.Flags>>7)&0x01 == 1
 	isSecondaryBroadcast := (packet.Flags>>6)&0x01 == 1
 

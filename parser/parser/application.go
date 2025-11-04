@@ -1,81 +1,17 @@
-package monad
+package parser
 
 import (
 	"encoding/binary"
 	"fmt"
-	"monad-flow/pkg/debug"
-	"monad-flow/pkg/packet"
+	packet "monad-flow/model"
 )
 
-var defaultProcessor = newPacketProcessor()
-
-type raptorQDecoder struct {
-	dataLength   uint32
-	symbols      map[uint16][]byte
-	sourceSymNum uint32
-}
-
-type messageReassembler struct {
-	AppMessageID string
-	Decoder      *raptorQDecoder
-	IsComplete   bool
-}
-
-type packetProcessor struct {
-	reassemblers map[string]*messageReassembler
-}
-
-func newPacketProcessor() *packetProcessor {
-	return &packetProcessor{
-		reassemblers: make(map[string]*messageReassembler),
-	}
-}
-
-func newRaptorQDecoder(dataLength uint32, symbolSize int) *raptorQDecoder {
-	return &raptorQDecoder{
-		dataLength:   dataLength,
-		symbols:      make(map[uint16][]byte),
-		sourceSymNum: (dataLength + uint32(symbolSize) - 1) / uint32(symbolSize),
-	}
-}
-
-// -----------------------------------------------------------------------------------
-
-func HexDumpAndReassemble(data []byte) {
-	fmt.Printf("\n---[ Packet Received by Parser (%d bytes) ]---\n", len(data))
-	defaultProcessor.processPacket(data)
-}
-
-func (p *packetProcessor) processPacket(data []byte) {
-	packet, err := parseMonadPacket(data)
-	if err != nil {
-		fmt.Println("chunk parsing failed: %w", err)
-		return
-	}
-	debug.PrintMonadPacketDetails(packet)
-	appMessageHash := fmt.Sprintf("%x", packet.AppMessageHash)
-	reassembler, exists := p.reassemblers[appMessageHash]
-
-	if !exists {
-		payloadSize := len(packet.Payload)
-		if payloadSize == 0 {
-			fmt.Println("received a chunk with zero-length symbol data")
-			return
-		}
-		reassembler = &messageReassembler{
-			AppMessageID: appMessageHash,
-			Decoder:      newRaptorQDecoder(packet.AppMessageLen, payloadSize),
-		}
-		p.reassemblers[appMessageHash] = reassembler
-	}
-}
-
-func parseMonadPacket(data []byte) (*packet.MonadPacketChunk, error) {
+func ParseMonadChunkPacket(data []byte) (*packet.MonadChunkPacket, error) {
 	if len(data) < 70 {
 		return nil, fmt.Errorf("data too short: expected at least 70 bytes, got %d", len(data))
 	}
 
-	packet := &packet.MonadPacketChunk{}
+	packet := &packet.MonadChunkPacket{}
 	offset := 0
 
 	// 1. Signature (65 bytes)
