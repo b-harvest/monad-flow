@@ -4,57 +4,24 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-
 	packet "monad-flow/model"
 )
 
-func HexDump(data []byte) {
-	// eBPF가 L2(Ethernet)부터 캡처했으므로 LinkTypeEthernet 사용
-	packet := gopacket.NewPacket(data, layers.LinkTypeEthernet, gopacket.Default)
+func NetworkHexDump(data packet.Packet) {
+	fmt.Println("-----------------------------------------------------------------")
+	fmt.Printf(" L2 (Ethernet) : %s -> %s (Type: %s)\n", data.EthernetLayer.SrcMAC, data.EthernetLayer.DstMAC, data.EthernetLayer.EthernetType)
+	fmt.Printf(" L3 (IPv4)     : %s -> %s (Proto: %s)\n", data.IPv4Layer.SrcIP, data.IPv4Layer.DstIP, data.IPv4Layer.Protocol)
 
-	// L2 (Ethernet)
-	if ethLayer := packet.Layer(layers.LayerTypeEthernet); ethLayer != nil {
-		eth, _ := ethLayer.(*layers.Ethernet)
-		fmt.Printf(" L2 (Ethernet) : %s -> %s (Type: %s)\n", eth.SrcMAC, eth.DstMAC, eth.EthernetType)
-	}
-
-	// L3 (IPv4)
-	if ipLayer := packet.Layer(layers.LayerTypeIPv4); ipLayer != nil {
-		ip, _ := ipLayer.(*layers.IPv4)
-		fmt.Printf(" L3 (IPv4)     : %s -> %s (Proto: %s)\n", ip.SrcIP, ip.DstIP, ip.Protocol)
-	}
-
-	// L4 (TCP / UDP)
-	var l4Proto string
-	if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-		tcp, _ := tcpLayer.(*layers.TCP)
-		fmt.Printf(" L4 (TCP)      : Port %d -> %d\n", tcp.SrcPort, tcp.DstPort)
-		l4Proto = "TCP"
-	} else if udpLayer := packet.Layer(layers.LayerTypeUDP); udpLayer != nil {
-		udp, _ := udpLayer.(*layers.UDP)
-		fmt.Printf(" L4 (UDP)      : Port %d -> %d\n", udp.SrcPort, udp.DstPort)
-		l4Proto = "UDP"
+	if tcpLayer := data.TCPLayer; tcpLayer != nil {
+		fmt.Printf(" L4 (TCP)      : Port %d -> %d\n", tcpLayer.SrcPort, tcpLayer.DstPort)
+	} else if udpLayer := data.UDPLayer; udpLayer != nil {
+		fmt.Printf(" L4 (UDP)      : Port %d -> %d\n", udpLayer.SrcPort, udpLayer.DstPort)
 	} else {
 		fmt.Printf(" L4 (Other)    : Protocol not TCP/UDP\n")
 		return
 	}
-
-	// L7 (Application Payload)
-	if appLayer := packet.ApplicationLayer(); appLayer != nil {
-		payload := appLayer.Payload()
-		if len(payload) > 0 {
-			fmt.Printf(" L7 (Payload)  : %s, %d bytes\n", l4Proto, len(payload))
-			fmt.Println("-----------------------------------------------------------------")
-			hexDump(payload)
-			fmt.Println("-----------------------------------------------------------------")
-		} else {
-			fmt.Printf(" L7 (Payload)  : [No Payload]\n")
-		}
-	} else {
-		fmt.Printf(" L7 (Payload)  : [No Application Layer]\n")
-	}
+	fmt.Printf(" L7 (Payload)  : %d bytes\n", len(data.Payload))
+	fmt.Println("-----------------------------------------------------------------")
 }
 
 func PrintMonadPacketDetails(packet *packet.MonadChunkPacket) {
@@ -99,7 +66,9 @@ func PrintMonadPacketDetails(packet *packet.MonadChunkPacket) {
 	fmt.Println("----------------------------------")
 }
 
-func hexDump(data []byte) {
+func ApplicationHexDump(data []byte) {
+	fmt.Printf(" L7 (Payload)  : %d bytes\n", len(data))
+	fmt.Println("-----------------------------------------------------------------")
 	const bytesPerLine = 16
 	var hexBuf, asciiBuf bytes.Buffer
 
@@ -135,4 +104,5 @@ func hexDump(data []byte) {
 		padding := (bytesPerLine * 3) + (bytesPerLine / 8)
 		fmt.Printf("%-*s |%s|\n", padding, hexStr, asciiBuf.String())
 	}
+	fmt.Println("-----------------------------------------------------------------")
 }
