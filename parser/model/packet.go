@@ -1,4 +1,4 @@
-package packet
+package model
 
 import (
 	"github.com/google/gopacket/layers"

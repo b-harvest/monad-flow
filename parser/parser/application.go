@@ -3,15 +3,15 @@ package parser
 import (
 	"encoding/binary"
 	"fmt"
-	packet "monad-flow/model"
+	"monad-flow/model"
 )
 
-func ParseMonadChunkPacket(data []byte) (*packet.MonadChunkPacket, error) {
+func ParseMonadChunkPacket(data []byte) (*model.MonadChunkPacket, error) {
 	if len(data) < 70 {
 		return nil, fmt.Errorf("data too short: expected at least 70 bytes, got %d", len(data))
 	}
 
-	packet := &packet.MonadChunkPacket{}
+	packet := &model.MonadChunkPacket{}
 	offset := 0
 
 	// 1. Signature (65 bytes)

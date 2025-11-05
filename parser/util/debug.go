@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 
-	packet "monad-flow/model"
+	"monad-flow/model"
 )
 
-func NetworkHexDump(data packet.Packet) {
+func NetworkHexDump(data model.Packet) {
 	fmt.Println("-----------------------------------------------------------------")
 	fmt.Printf(" L2 (Ethernet) : %s -> %s (Type: %s)\n", data.EthernetLayer.SrcMAC, data.EthernetLayer.DstMAC, data.EthernetLayer.EthernetType)
 	fmt.Printf(" L3 (IPv4)     : %s -> %s (Proto: %s)\n", data.IPv4Layer.SrcIP, data.IPv4Layer.DstIP, data.IPv4Layer.Protocol)
@@ -24,7 +24,7 @@ func NetworkHexDump(data packet.Packet) {
 	fmt.Println("-----------------------------------------------------------------")
 }
 
-func PrintMonadPacketDetails(packet *packet.MonadChunkPacket) {
+func PrintMonadPacketDetails(packet *model.MonadChunkPacket) {
 	isBroadcast := (packet.Flags>>7)&0x01 == 1
 	isSecondaryBroadcast := (packet.Flags>>6)&0x01 == 1
 

@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	// 파싱된 청크 구조체를 사용하기 위해
-	packet "monad-flow/model"
+	"monad-flow/model"
 	"monad-flow/util"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -52,7 +52,7 @@ func NewDecoderCache() *DecoderCache {
 // HandleChunk는 main.go에서 호출할 단일 진입점입니다.
 // 이 함수는 수신된 청크를 적절한 디코더에 전달하고,
 // 디코딩이 완료되면 원본 메시지를 반환합니다.
-func (dc *DecoderCache) HandleChunk(chunk *packet.MonadChunkPacket) (*DecodedMessage, error) {
+func (dc *DecoderCache) HandleChunk(chunk *model.MonadChunkPacket) (*DecodedMessage, error) {
 	// 1. 키(AppMessageHash)를 가져옵니다.
 	key := chunk.AppMessageHash
 
