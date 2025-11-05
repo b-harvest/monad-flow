@@ -8,7 +8,7 @@ func NewOrderedSet() OrderedSet {
 	return nil
 }
 
-func (s OrderedSet) find(val uint16) (index int, found bool) {
+func (s OrderedSet) Find(val uint16) (index int, found bool) {
 	index = sort.Search(len(s), func(i int) bool {
 		return s[i] >= val
 	})
@@ -23,7 +23,7 @@ func (s *OrderedSet) Append(val uint16) {
 }
 
 func (s *OrderedSet) Insert(val uint16) bool {
-	index, found := s.find(val)
+	index, found := s.Find(val)
 	if found {
 		return false
 	}
@@ -35,7 +35,7 @@ func (s *OrderedSet) Insert(val uint16) bool {
 }
 
 func (s *OrderedSet) Remove(val uint16) bool {
-	index, found := s.find(val)
+	index, found := s.Find(val)
 	if !found {
 		return false
 	}
@@ -44,7 +44,7 @@ func (s *OrderedSet) Remove(val uint16) bool {
 }
 
 func (s *OrderedSet) InsertOrRemove(val uint16) {
-	index, found := s.find(val)
+	index, found := s.Find(val)
 	if found {
 		*s = append((*s)[:index], (*s)[index+1:]...)
 	} else {
