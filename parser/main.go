@@ -6,15 +6,20 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
+	"monad-flow/decoder"
 	"monad-flow/parser"
 	"monad-flow/util"
 
 	"github.com/cilium/ebpf/ringbuf"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	mtu := getMTU()
+
 	if len(os.Args) < 2 {
 		log.Fatalf("Usage: sudo %s <interface-name>", os.Args[0])
 	}
@@ -30,6 +35,8 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	decoderCache := decoder.NewDecoderCache()
 
 	log.Println("Waiting for packets on port 8000...")
 	log.Println("Run 'sudo cat /sys/kernel/debug/tracing/trace_pipe' to see kernel prints.")
@@ -63,14 +70,66 @@ func main() {
 				dumpLen = len(pktData)
 			}
 			packet := parser.ParsePacket(pktData[:dumpLen])
-			chunk, err := parser.ParseMonadChunkPacket(packet.Payload)
-			if err != nil {
-				log.Printf("Chunk parsing failed: %v (data len: %d)", err, len(packet.Payload))
-				return
+			stride := mtu - (int(realLen) - len(packet.Payload) - (int(realLen) - int(packet.IPv4Layer.Length)))
+			if stride <= 0 {
+				log.Fatalf("Invalid MTU (%d), calculated stride is %d", mtu, stride)
 			}
-			util.PrintMonadPacketDetails(chunk)
+
+			if packet.Payload == nil {
+				continue
+			}
+
+			l7Payload := packet.Payload
+			offset := 0
+			for offset < len(l7Payload) {
+				remainingLen := len(l7Payload) - offset
+				currentStride := stride // .env에서 계산한 Stride
+
+				if remainingLen < currentStride {
+					currentStride = remainingLen
+				}
+
+				chunkData := l7Payload[offset : offset+currentStride]
+				offset += currentStride
+
+				processChunk(decoderCache, chunkData)
+			}
 		}
 	}()
 
 	<-stop
+}
+
+func getMTU() int {
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found, using default MTU 1500")
+	}
+
+	mtuStr := os.Getenv("MTU")
+	if mtuStr == "" {
+		mtuStr = "1480"
+	}
+
+	mtu, err := strconv.Atoi(mtuStr)
+	if err != nil {
+		log.Fatalf("Invalid MTU value in .env: %s", mtuStr)
+	}
+	return mtu
+}
+
+func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte) {
+	chunk, err := parser.ParseMonadChunkPacket(chunkData)
+	if err != nil {
+		log.Printf("Chunk parsing failed: %v (data len: %d)", err, len(chunkData))
+		return
+	}
+
+	decodedMsg, err := decoderCache.HandleChunk(chunk)
+	if err != nil {
+		log.Printf("Raptor processing error: %v", err)
+	}
+	if decodedMsg != nil {
+		log.Printf("🎉 Successfully decoded message! Hash: %x, Size: %d bytes",
+			decodedMsg.AppMessageHash, len(decodedMsg.Data))
+	}
 }
