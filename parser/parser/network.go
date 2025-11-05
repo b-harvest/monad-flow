@@ -1,14 +1,14 @@
 package parser
 
 import (
-	packet "monad-flow/model"
+	"monad-flow/model"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 )
 
-func ParsePacket(data []byte) packet.Packet {
-	info := packet.Packet{}
+func ParsePacket(data []byte) model.Packet {
+	info := model.Packet{}
 	packet := gopacket.NewPacket(data, layers.LinkTypeEthernet, gopacket.Default)
 
 	// L2 (Ethernet)
