@@ -35,7 +35,7 @@ func NewBPFMonitor(ifName string) (*BPFMonitor, error) {
 	}
 
 	// 2. eBPF 프로그램 로드
-	spec, err := ebpf.LoadCollectionSpec("./util/lib/packet_capture.o")
+	spec, err := ebpf.LoadCollectionSpec("./util/hook/packet_capture.o")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load eBPF spec: %w", err)
 	}
