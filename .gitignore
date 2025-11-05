@@ -33,7 +33,3 @@ go.work.sum
 
 # bpf2go eBPF object file
 *.o
-
-# bpf2go go binding file
-bpf_bpfel.go
-bpf_bpfeb.go
