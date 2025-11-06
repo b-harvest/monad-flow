@@ -5,10 +5,6 @@ import (
 	"fmt"
 )
 
-// ========================================================================
-//  DenseMatrix (이전과 동일)
-// ========================================================================
-
 // DenseMatrix는 가우스 소거법에 사용되는 밀집 행렬입니다.
 type DenseMatrix struct {
 	data  []bool
@@ -142,11 +138,6 @@ func (m *DenseMatrix) rowwiseEliminationSchedule(
 		// 1. 피벗 찾기
 		row, col, ok := eliminationStrategyFn(a, step)
 		if !ok {
-			// (Rust: `map_err(|_| "elimination_strategy_fn failed".to_string())`)
-			// 이 단계에서 피벗을 찾지 못하면 행렬이 특이(singular)하거나
-			// 이미 소거가 완료된 것일 수 있습니다.
-			// Monad의 `try_inactive_gaussian` 코드는 이 에러를 무시(`let _ = ...`)하므로,
-			// Go에서도 에러를 반환하지 않고 중단합니다.
 			return nil
 		}
 
@@ -175,10 +166,6 @@ func (m *DenseMatrix) rowwiseEliminationSchedule(
 
 	return nil
 }
-
-// ========================================================================
-//  RCSwapMatrix (이전 스텁에서 업데이트)
-// ========================================================================
 
 // rcSwapMatrix는 행/열 교환(Pivoting)을 효율적으로 추적하는 래퍼입니다.
 type rcSwapMatrix struct {
@@ -227,11 +214,6 @@ func (rcs *rcSwapMatrix) at(i, j int) bool {
 	return rcs.mat.At(physRow, physCol)
 }
 
-// ========================================================================
-//  가우스 소거법 솔버 (이전 스텁에서 업데이트)
-// ========================================================================
-
-// RowOperation ...
 type RowOperation interface{ isRowOperation() }
 type RowOperationSubAssign struct {
 	I int
