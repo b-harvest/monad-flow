@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -92,7 +93,17 @@ func main() {
 				chunkData := l7Payload[offset : offset+currentStride]
 				offset += currentStride
 
-				processChunk(decoderCache, chunkData)
+				data, err := processChunk(decoderCache, chunkData)
+
+				if err != nil {
+					log.Printf("Failed to process chunk: %v", err)
+					continue
+				}
+				if data != nil {
+					if err := parser.HandleDecodedMessage(data); err != nil {
+						log.Printf("[RLP-ERROR] Failed to decode message: %v", err)
+					}
+				}
 			}
 		}
 	}()
@@ -117,19 +128,19 @@ func getMTU() int {
 	return mtu
 }
 
-func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte) {
+func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte) ([]byte, error) {
 	chunk, err := parser.ParseMonadChunkPacket(chunkData)
 	if err != nil {
-		log.Printf("Chunk parsing failed: %v (data len: %d)", err, len(chunkData))
-		return
+		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
 	}
 
 	decodedMsg, err := decoderCache.HandleChunk(chunk)
 	if err != nil {
-		log.Printf("Raptor processing error: %v", err)
+		return nil, fmt.Errorf("raptor processing error: %w", err)
 	}
+
 	if decodedMsg != nil {
-		log.Printf("🎉 Successfully decoded message! Hash: %x, Size: %d bytes",
-			decodedMsg.AppMessageHash, len(decodedMsg.Data))
+		return decodedMsg.Data, nil
 	}
+	return nil, nil
 }
