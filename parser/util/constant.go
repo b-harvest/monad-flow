@@ -36,6 +36,11 @@ const (
 	StateSyncMsgType         = 5
 )
 
+const (
+	QC = 1
+	TC = 2
+)
+
 var ProtocolMessageName = "ProtocolMessage"
 
 // V0는 RFC 5053 섹션 5.6.1의 상수 테이블입니다.
