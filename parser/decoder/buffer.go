@@ -6,8 +6,6 @@ import (
 	"monad-flow/util"
 )
 
-// buffer는 '두뇌'가 관리하는 단일 버퍼(방정식)의 상태입니다.
-// Rust의 `Buffer` struct를 포팅한 것입니다.
 type buffer struct {
 	// 이 버퍼에 XOR로 연결된 모든 중간 심볼(변수)의 ID 목록
 	intermediateSymbolIDs util.OrderedSet
@@ -19,8 +17,6 @@ type buffer struct {
 	used bool
 }
 
-// newBuffer는 비어있는 새 버퍼 상태를 생성합니다.
-// Rust의 `Buffer::new()`에 해당합니다.
 func newBuffer() *buffer {
 	return &buffer{
 		intermediateSymbolIDs: util.NewOrderedSet(),
@@ -29,43 +25,28 @@ func newBuffer() *buffer {
 	}
 }
 
-// appendIntermediateSymbolID는 버퍼에 심볼 ID를 추가합니다.
-// Rust의 `append_intermediate_symbol_id`에 해당합니다.
 func (b *buffer) appendIntermediateSymbolID(id uint16, incrementActiveUsedWeight bool) {
-	// [최적화] Rust의 append는 정렬된 상태로 삽입됨을 가정합니다.
 	b.intermediateSymbolIDs.Append(id)
 	if incrementActiveUsedWeight {
 		b.activeUsedWeight++
 	}
 }
 
-// firstIntermediateSymbolID는 이 버퍼와 연결된 첫 번째 심볼 ID를 반환합니다.
-// (weight=1일 때 호출됨을 가정)
 func (b *buffer) firstIntermediateSymbolID() (uint16, bool) {
 	return b.intermediateSymbolIDs.First()
 }
 
-// xorEq는 'other' 버퍼의 심볼 목록을 'b'의 심볼 목록과 Set-XOR합니다.
-// Rust의 `Buffer::xor_eq`에 해당합니다.
-// [주의] Rust 주석에 따라, 이 함수는 `activeUsedWeight`는 건드리지 않습니다.
-//
-//	호출자(lowLevelDecoder)가 `activeUsedWeight`를 별도로 갱신해야 합니다.
 func (b *buffer) xorEq(other *buffer) {
 	for _, id := range other.intermediateSymbolIDs.Values() {
 		b.intermediateSymbolIDs.InsertOrRemove(id)
 	}
 }
 
-// [새 함수 추가] isPaired는 버퍼의 active_used_weight가 1인지 확인합니다.
-// (Rust의 `is_paired` 헬퍼 함수로 추정)
 func (b *buffer) isPaired() bool {
 	return b.activeUsedWeight == 1
 }
 
-// --- BufferId ---
-
 // bufferIdType은 버퍼가 임시 버퍼인지 수신된 청크 버퍼인지 구분합니다.
-// Rust의 `BufferId` enum (TempBuffer, ReceiveBuffer)에 해당합니다.
 type bufferIdType int
 
 const (
@@ -76,17 +57,13 @@ const (
 )
 
 // bufferId는 bufferSet 내의 특정 버퍼를 가리키는 핸들입니다.
-// Rust의 `BufferId` enum의 두 variant를 Go struct로 표현합니다.
 type bufferId struct {
 	Type  bufferIdType
 	Index int // TempBuffer의 경우 0..numTempBuffers-1
 	// ReceiveBuffer의 경우 0..num_received_buffers-1 (상대 인덱스)
 }
 
-// --- BufferSet ---
-
 // bufferSet은 디코딩 과정에 필요한 모든 바이트 버퍼를 관리합니다.
-// Rust의 `BufferSet` 구조체에 해당하며, 실제 XOR 연산을 수행합니다.
 type bufferSet struct {
 	// buffers는 모든 버퍼를 저장하는 슬라이스입니다.
 	// [0 .. numTempBuffers-1] : 임시 버퍼
@@ -96,10 +73,7 @@ type bufferSet struct {
 	numTempBuffers int // 임시 버퍼의 개수
 }
 
-// newBufferSet는 새 버퍼셋을 생성하고, 필요한 임시 버퍼를 미리 할당합니다.
-// Rust의 `BufferSet::new`에 해당합니다.
 func newBufferSet(symbolSize int, numTempBuffers int) *bufferSet {
-	// 임시 버퍼들을 미리 할당하고 0으로 초기화합니다.
 	buffers := make([][]byte, numTempBuffers)
 	for i := 0; i < numTempBuffers; i++ {
 		buffers[i] = make([]byte, symbolSize)
@@ -113,7 +87,6 @@ func newBufferSet(symbolSize int, numTempBuffers int) *bufferSet {
 }
 
 // bufferIndex는 `bufferId`를 `buffers` 슬라이스의 실제 인덱스로 변환합니다.
-// Rust의 `buffer_index` 헬퍼 함수에 해당합니다.
 func (bs *bufferSet) bufferIndex(id bufferId) int {
 	if id.Type == tempBuffer {
 		// 임시 버퍼의 인덱스는 0부터 시작
@@ -124,12 +97,6 @@ func (bs *bufferSet) bufferIndex(id bufferId) int {
 }
 
 // addReceiveBuffer는 수신된 새 청크 페이로드(payload)를 버퍼셋에 추가합니다.
-// [!] 중요: 이 함수는 payload의 *복사본*을 만들어 저장합니다.
-//
-//	(원본 eBPF 버퍼가 재사용될 수 있으므로)
-//
-// Rust의 `push_buffer`에 해당하며, `managedDecoder`가 사용할
-// *상대 인덱스* (relative index)를 반환합니다.
 func (bs *bufferSet) addReceiveBuffer(payload []byte) (int, error) {
 	if len(payload) != bs.symbolSize {
 		return 0, fmt.Errorf("invalid symbol size: expected %d, got %d",
@@ -142,15 +109,12 @@ func (bs *bufferSet) addReceiveBuffer(payload []byte) (int, error) {
 
 	bs.buffers = append(bs.buffers, buf)
 
-	// 방금 추가된 버퍼의 '상대 인덱스'를 반환합니다.
 	// (전체 길이) - (0-based 인덱싱 1) - (임시 버퍼 개수)
 	relativeIndex := len(bs.buffers) - 1 - bs.numTempBuffers
 	return relativeIndex, nil
 }
 
 // xorBuffers는 `a = a ^ b` 연산을 수행합니다.
-// `bufferId` (핸들)를 받아 실제 버퍼를 찾아 바이트 단위 XOR를 실행합니다.
-// Rust의 `xor_buffers`에 해당합니다.
 func (bs *bufferSet) xorBuffers(a, b bufferId) error {
 	aIndex := bs.bufferIndex(a)
 	bIndex := bs.bufferIndex(b)
@@ -158,8 +122,6 @@ func (bs *bufferSet) xorBuffers(a, b bufferId) error {
 	if aIndex == bIndex {
 		return errors.New("xorBuffers: cannot XOR buffer with itself")
 	}
-
-	// Bounds check
 	if aIndex < 0 || aIndex >= len(bs.buffers) {
 		return fmt.Errorf("xorBuffers: bufferId 'a' is out of bounds (index %d)", aIndex)
 	}
@@ -185,7 +147,6 @@ func (bs *bufferSet) xorBuffers(a, b bufferId) error {
 }
 
 // buffer는 `bufferId`에 해당하는 버퍼의 (읽기 전용) 슬라이스를 반환합니다.
-// Rust의 `buffer` 메서드에 해당합니다.
 func (bs *bufferSet) buffer(id bufferId) ([]byte, error) {
 	index := bs.bufferIndex(id)
 
@@ -196,12 +157,7 @@ func (bs *bufferSet) buffer(id bufferId) ([]byte, error) {
 	return bs.buffers[index], nil
 }
 
-// ========================================================================
-//  bufferWeightMap (이번 단계에서 새로 추가됨)
-// ========================================================================
-
 // bufferWeightMap은 'buffer'의 가중치를 기반으로 하는 Min-Heap (우선순위 큐)입니다.
-// Rust의 `BufferWeightMap`을 포팅한 것입니다.
 type bufferWeightMap struct {
 	// 힙 배열 (i번째 노드에 buffer_index 저장)
 	heapIndexToBufferIndex []uint16
@@ -242,8 +198,6 @@ func (bwm *bufferWeightMap) ensureCapacity(bufferIndex int) {
 		bwm.bufferIndexToHeapIndex = newHeapIndices
 	}
 }
-
-// --- 힙 내부 헬퍼 ---
 
 // weightAtHeapIndex는 힙 인덱스를 이용해 가중치를 조회합니다.
 func (bwm *bufferWeightMap) weightAtHeapIndex(heapIndex int) uint16 {
@@ -321,31 +275,23 @@ func (bwm *bufferWeightMap) removeHeapIndex(heapIndex int, bufferIndex uint16) {
 	bwm.bufferIndexToWeight[bufferIndex] = 0 // 0 = None (힙에 없음)
 
 	// 4. (제거 대상이 마지막 노드가 아니었을 경우)
-	//    교환되어 heapIndex로 이동한 노드의 힙 속성을 복원
+	// 교환되어 heapIndex로 이동한 노드의 힙 속성을 복원
 	if heapIndex != lastHeapIndex {
-		// Rust: `match weight.cmp(&prev_weight)`
 		// 새로 이동한 노드의 가중치가 이전에 있던 노드의 가중치와 비교
-		// 1. 새로 이동한 노드의 (현재) 가중치
 		currentWeight := bwm.weightAtHeapIndex(heapIndex)
-		// 2. 이전에 있던 노드의 가중치
-
 		if currentWeight < prevWeight {
 			bwm.pullUp(heapIndex)
 		} else if currentWeight > prevWeight {
 			bwm.pushDown(heapIndex)
 		}
-		// 같으면 아무것도 안 함
 	}
 }
-
-// --- 힙 공개 API ---
 
 func (bwm *bufferWeightMap) isEmpty() bool {
 	return len(bwm.heapIndexToBufferIndex) == 0
 }
 
 // peekMin은 힙의 최소값(루트)을 (제거하지 않고) 반환합니다.
-// (bufferIndex, weight, ok)
 func (bwm *bufferWeightMap) peekMin() (uint16, uint16, bool) {
 	if bwm.isEmpty() {
 		return 0, 0, false
@@ -385,10 +331,10 @@ func (bwm *bufferWeightMap) removeMin() {
 
 // removeBufferWeight는 특정 bufferIndex를 힙에서 제거합니다.
 func (bwm *bufferWeightMap) removeBufferWeight(bufferIndex int) (uint16, bool) {
-	bwm.ensureCapacity(bufferIndex) // 룩업 테이블 접근 전 용량 확보
+	bwm.ensureCapacity(bufferIndex)
 	weight := bwm.bufferIndexToWeight[bufferIndex]
 	if weight == 0 {
-		return 0, false // 힙에 없음
+		return 0, false
 	}
 
 	heapIndex := bwm.bufferIndexToHeapIndex[bufferIndex]
@@ -409,7 +355,7 @@ func (bwm *bufferWeightMap) updateBufferWeight(bufferIndex int, weight uint16) {
 	}
 
 	if prevWeight == weight {
-		return // 가중치 변경 없음
+		return
 	}
 
 	bwm.bufferIndexToWeight[bufferIndex] = weight
