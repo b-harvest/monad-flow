@@ -17,6 +17,27 @@ const (
 	halfMax = 16
 )
 
+const (
+	// ProtocolMessage Type ID
+	ProposalMsgType      = 1
+	VoteMsgType          = 2
+	TimeoutMsgType       = 3
+	RoundRecoveryMsgType = 4
+	NoEndorsementMsgType = 5
+	AdvanceRoundMsgType  = 6
+)
+
+const (
+	// MonadMessage Type ID
+	ConsensusMsgType         = 1
+	BlockSyncRequestMsgType  = 2
+	BlockSyncResponseMsgType = 3
+	ForwardedTxMsgType       = 4
+	StateSyncMsgType         = 5
+)
+
+var ProtocolMessageName = "ProtocolMessage"
+
 // V0는 RFC 5053 섹션 5.6.1의 상수 테이블입니다.
 var V0 = [256]uint32{
 	251291136, 3952231631, 3370958628, 4070167936, 123631495, 3351110283, 3218676425, 2011642291,
