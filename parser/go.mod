@@ -13,9 +13,9 @@ require (
 )
 
 require (
-	github.com/ethereum/go-ethereum v1.16.7 // indirect
+	github.com/ethereum/go-ethereum v1.16.7 // direct
 	github.com/holiman/uint256 v1.3.2 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
+	github.com/joho/godotenv v1.5.1 // direct
 	github.com/vishvananda/netns v0.0.5 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/sys v0.37.0 // indirect
