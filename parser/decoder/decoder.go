@@ -503,15 +503,6 @@ func (d *lowLevelDecoder) tryReactivateSymbols(xorBuffers func(aFlat, bFlat int)
 				}
 			}
 
-			// 8. `reducee` 버퍼가 이 연산으로 인해 "해결"되었는지 확인
-			if reduceeBuffer.isPaired() {
-				if firstSym, ok := reduceeBuffer.firstIntermediateSymbolID(); ok {
-					if firstSym < d.params.NumSourceSymbols {
-						d.numSourceSymbolsPaired++
-					}
-				}
-			}
-
 			// 9. `managedDecoder`에게 실제 바이트 XOR 연산 요청
 			err := xorBuffers(
 				d.bufferIndexToBufferID(int(reduceeBufferIndex)).toFlat(d.numTempBuffersRequired()),
@@ -695,8 +686,4 @@ func (d *lowLevelDecoder) GetReconstructedOrder() (map[int]bufferId, error) {
 	}
 
 	return reconstructedMap, nil
-}
-
-func (d *lowLevelDecoder) nextBufferIndex() int {
-	return len(d.bufferState)
 }

@@ -1,6 +1,6 @@
-package message
+package outbound_router
 
-import "monad-flow/model/message/monad"
+import "github.com/ethereum/go-ethereum/rlp"
 
 type NetworkMessageVersion struct {
 	SerializeVersion   uint32
@@ -10,5 +10,5 @@ type NetworkMessageVersion struct {
 type OutboundRouterMessage struct {
 	Version     NetworkMessageVersion
 	MessageType uint8
-	Message     monad.MonadMessage
+	Message     rlp.RawValue
 }

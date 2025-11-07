@@ -3,7 +3,17 @@ package proposal
 import (
 	"monad-flow/model/message/protocol/common"
 	"monad-flow/util"
+
+	"github.com/ethereum/go-ethereum/core/types"
 )
+
+type Ommer struct{}
+
+type ExecutionBody struct {
+	Transactions []*types.Transaction
+	Ommers       []*Ommer
+	Withdrawals  []*types.Withdrawal
+}
 
 type ProposalMessage struct {
 	ProposalRound util.Round
@@ -14,7 +24,7 @@ type ProposalMessage struct {
 }
 
 type ConsensusBlockBody struct {
-	ExecutionBody util.ExecutionBody
+	ExecutionBody ExecutionBody
 }
 
 func (*ProposalMessage) IsProtocolMessage() {}

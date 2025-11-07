@@ -41,6 +41,45 @@ const (
 	TC = 2
 )
 
+const (
+	NEC   = 1
+	NoTip = 2
+)
+
+const (
+	HighExtendTipType = 1
+	HighExtendQcType  = 2
+)
+
+const (
+	AppMsgType   uint8 = 1
+	PeerDiscType uint8 = 2
+	GroupType    uint8 = 3
+)
+
+const (
+	PingMsgType                   uint8 = 1
+	PongMsgType                   uint8 = 2
+	PeerLookupRequestMsgType      uint8 = 3
+	PeerLookupResponseMsgType     uint8 = 4
+	FullNodeRaptorcastReqMsgType  uint8 = 5
+	FullNodeRaptorcastRespMsgType uint8 = 6
+)
+
+const (
+	PeerDiscoveryVersion uint16 = 1
+)
+
+const (
+	GroupMsgVersion uint8 = 1
+)
+
+const (
+	MsgTypePrepReq uint8 = 1
+	MsgTypePrepRes uint8 = 2
+	MsgTypeConfGrp uint8 = 3
+)
+
 var ProtocolMessageName = "ProtocolMessage"
 
 // V0는 RFC 5053 섹션 5.6.1의 상수 테이블입니다.

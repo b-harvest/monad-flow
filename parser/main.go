@@ -70,7 +70,13 @@ func main() {
 			if dumpLen > len(pktData) {
 				dumpLen = len(pktData)
 			}
+
 			packet := parser.ParsePacket(pktData[:dumpLen])
+			// UDP 패킷이 아니라면 일단 스킵
+			if packet.UDPLayer == nil {
+				continue
+			}
+
 			stride := mtu - (int(realLen) - len(packet.Payload) - (int(realLen) - int(packet.IPv4Layer.Length)))
 			if stride <= 0 {
 				log.Fatalf("Invalid MTU (%d), calculated stride is %d", mtu, stride)
@@ -113,7 +119,7 @@ func main() {
 
 func getMTU() int {
 	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: .env file not found, using default MTU 1500")
+		log.Println("Warning: .env file not found, using default MTU 1480")
 	}
 
 	mtuStr := os.Getenv("MTU")
@@ -136,7 +142,9 @@ func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte) ([]byte,
 
 	decodedMsg, err := decoderCache.HandleChunk(chunk)
 	if err != nil {
-		return nil, fmt.Errorf("raptor processing error: %w", err)
+		if !errors.Is(err, decoder.ErrDuplicateSymbol) {
+			return nil, fmt.Errorf("raptor processing error: %w", err)
+		}
 	}
 
 	if decodedMsg != nil {

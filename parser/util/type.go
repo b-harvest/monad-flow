@@ -1,6 +1,9 @@
 package util
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
 
 type BlockID = common.Hash
 type Round uint64
@@ -9,7 +12,6 @@ type SeqNum uint64
 type ConsensusBlockBodyId = common.Hash
 type NodeID []byte
 type RoundSignature []byte
-type ExecutionBody []byte
-type ProposedHeader []byte
-type FinalizedHeader []byte
-type NoTipCertificate []byte
+type Signature []byte
+type FinalizedHeader types.Header
+type BlsAggregateSignature []byte
