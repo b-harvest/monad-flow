@@ -1,4 +1,4 @@
-package monad
+package consensus
 
 import (
 	"fmt"
