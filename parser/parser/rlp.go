@@ -83,7 +83,7 @@ func handlePeerDiscoveryMessage(msg peer_discovery.PeerDiscoveryMessage) error {
 	case *peer_discovery.PeerLookupResponse:
 		// log.Println("[RLP-PARSE] -> It's a PeerLookupResponse")
 	case *peer_discovery.FullNodeRaptorcastRequest:
-		log.Println("[RLP-PARSE] -> It's a FullNodeRaptorcastRequest")
+		// log.Println("[RLP-PARSE] -> It's a FullNodeRaptorcastRequest")
 	case *peer_discovery.FullNodeRaptorcastResponse:
 		log.Println("[RLP-PARSE] -> It's a FullNodeRaptorcastResponse")
 	default:
@@ -120,7 +120,7 @@ func handleConsensusMessage(payload []byte) error {
 	case *vote.VoteMessage:
 		// log.Printf("[RLP-PARSE]   -> IT'S A VOTE! Round: %d, BlockID: %s", msg.Vote.Round, msg.Vote.ID.String())
 	case *timeout.TimeoutMessage:
-		log.Printf("[RLP-PARSE]   -> IT'S A TIMEOUT! Round: %d, Epoch: %d", msg.TMInfo.Round, msg.TMInfo.Epoch)
+		// log.Printf("[RLP-PARSE]   -> IT'S A TIMEOUT! Round: %d, Epoch: %d", msg.TMInfo.Round, msg.TMInfo.Epoch)
 	case *round_recovery.RoundRecoveryMessage:
 		log.Printf("[RLP-PARSE]   -> IT'S A ROUND RECOVERY! Round: %d, Epoch: %d", msg.Round, msg.Epoch)
 	case *no_endorsement.NoEndorsementMessage:
