@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"monad-flow/model/message/monad"
+	"monad-flow/model/message/monad/consensus"
+	"monad-flow/model/message/monad/forwarded_tx"
 	"monad-flow/model/message/outbound_router"
 	"monad-flow/model/message/outbound_router/fullnode_group"
 	"monad-flow/model/message/outbound_router/peer_discovery"
@@ -42,7 +44,7 @@ func HandleDecodedMessage(data []byte) error {
 		case util.BlockSyncResponseMsgType:
 			log.Println("[RLP-PARSE] Handling BlockSyncResponse (Type 3)... (not implemented)")
 		case util.ForwardedTxMsgType:
-			log.Println("[RLP-PARSE] Handling ForwardedTx (Type 4)... (not implemented)")
+			return handleForwardedTx(monadMsg.Payload)
 		case util.AdvanceRoundMsgType:
 			log.Println("[RLP-PARSE] Handling StateSyncMessage (Type 5)... (not implemented)")
 		default:
@@ -107,7 +109,7 @@ func handleFullNodesGroupMessage(msg fullnode_group.FullNodesGroupMessage) error
 }
 
 func handleConsensusMessage(payload []byte) error {
-	var consensusMsg monad.ConsensusMessage
+	var consensusMsg consensus.ConsensusMessage
 	if err := rlp.Decode(bytes.NewReader(payload), &consensusMsg); err != nil {
 		return fmt.Errorf("stage 2 (ConsensusMessage) decode failed: %w", err)
 	}
@@ -139,5 +141,21 @@ func handleAdvancedRound(msg *advanced_round.AdvanceRoundMessage) error {
 	case *common.RoundCertificateTC:
 		log.Printf("[RLP-PARSE]   -> IT'S AN ADVANCE ROUND! TC round: %d", arm.TC.Round)
 	}
+	return nil
+}
+
+func handleForwardedTx(payload []byte) error {
+	var forwardedTxMsg forwarded_tx.ForwardedTxMessage
+	if err := rlp.Decode(bytes.NewReader(payload), &forwardedTxMsg); err != nil {
+		return fmt.Errorf("stage 2 (ForwardedTxMessage) decode failed: %w", err)
+	}
+	// log.Printf("[RLP-PARSE]   -> IT'S AN FORWARDEDTX! (Total Txs: %d)", len(forwardedTxMsg))
+	// for i, tx := range forwardedTxMsg {
+	// 	end := 10
+	// 	if len(tx) < 10 {
+	// 		end = len(tx)
+	// 	}
+	// 	log.Printf("[RLP-PARSE]     -> Tx[%d] (First %dB): %x...", i, end, tx[:end])
+	// }
 	return nil
 }
