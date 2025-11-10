@@ -122,7 +122,7 @@ func handleConsensusMessage(payload []byte) error {
 	case *timeout.TimeoutMessage:
 		// log.Printf("[RLP-PARSE]   -> IT'S A TIMEOUT! Round: %d, Epoch: %d", msg.TMInfo.Round, msg.TMInfo.Epoch)
 	case *round_recovery.RoundRecoveryMessage:
-		log.Printf("[RLP-PARSE]   -> IT'S A ROUND RECOVERY! Round: %d, Epoch: %d", msg.Round, msg.Epoch)
+		// log.Printf("[RLP-PARSE]   -> IT'S A ROUND RECOVERY! Round: %d, Epoch: %d", msg.Round, msg.Epoch)
 	case *no_endorsement.NoEndorsementMessage:
 		log.Printf("[RLP-PARSE]   -> IT'S A NO ENDORSEMENT! Round: %d, Epoch: %d", msg.Msg.Round, msg.Msg.Epoch)
 	case *advanced_round.AdvanceRoundMessage:

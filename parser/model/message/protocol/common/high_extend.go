@@ -1,7 +1,6 @@
 package common
 
 import (
-	"bytes"
 	"fmt"
 	"monad-flow/util"
 
@@ -14,7 +13,7 @@ type HighExtend interface {
 
 type HighExtendTip struct {
 	Tip           *ConsensusTip
-	VoteSignature []byte `rlp:"optional"`
+	VoteSignature []byte
 }
 
 func (h *HighExtendTip) isHighExtend() {}
@@ -38,18 +37,6 @@ type HighExtendWrapper struct {
 }
 
 func (w *HighExtendWrapper) DecodeRLP(s *rlp.Stream) error {
-	raw, err := s.Raw()
-	if err != nil {
-		return fmt.Errorf("failed to get raw RLP for HighExtend: %w", err)
-	}
-
-	if len(raw) == 0 || (len(raw) == 1 && raw[0] == 0x80) {
-		w.Extend = nil
-		return nil
-	}
-
-	s = rlp.NewStream(bytes.NewReader(raw), uint64(len(raw)))
-
 	if _, err := s.List(); err != nil {
 		return fmt.Errorf("HighExtend RLP is not a list: %w", err)
 	}
@@ -59,20 +46,36 @@ func (w *HighExtendWrapper) DecodeRLP(s *rlp.Stream) error {
 		return fmt.Errorf("failed to decode HighExtend type ID: %w", err)
 	}
 
-	var payload HighExtend
 	switch typeID {
 	case util.HighExtendTipType:
-		payload = new(HighExtendTip)
+		tipPayload := new(HighExtendTip)
+
+		tipPayload.Tip = new(ConsensusTip)
+		if err := s.Decode(tipPayload.Tip); err != nil {
+			return fmt.Errorf("failed to decode HighExtendTip.Tip: %w", err)
+		}
+
+		if err := s.Decode(&tipPayload.VoteSignature); err != nil {
+			if err != rlp.EOL {
+				return fmt.Errorf("failed to decode HighExtendTip.VoteSignature: %w", err)
+			}
+		}
+
+		w.Extend = tipPayload
+
 	case util.HighExtendQcType:
-		payload = new(HighExtendQc)
+		qcPayload := new(HighExtendQc)
+
+		qcPayload.QC = new(QuorumCertificate)
+		if err := s.Decode(qcPayload.QC); err != nil {
+			return fmt.Errorf("failed to decode HighExtendQc.QC: %w", err)
+		}
+
+		w.Extend = qcPayload
+
 	default:
 		return fmt.Errorf("unknown HighExtend type ID: %d", typeID)
 	}
 
-	if err := s.Decode(payload); err != nil {
-		return fmt.Errorf("failed to decode HighExtend payload type %d: %w", typeID, err)
-	}
-
-	w.Extend = payload
 	return s.ListEnd()
 }

@@ -94,6 +94,7 @@ func (cm *ConsensusMessage) DecodeRLP(s *rlp.Stream) error {
 	case util.VoteMsgType:
 		msg = new(vote.VoteMessage)
 	case util.TimeoutMsgType:
+		// util.ApplicationHexDump(payloadBytes)
 		msg = new(timeout.TimeoutMessage)
 	case util.RoundRecoveryMsgType:
 		msg = new(round_recovery.RoundRecoveryMessage)
