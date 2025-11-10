@@ -13,7 +13,8 @@ type HighExtend interface {
 }
 
 type HighExtendTip struct {
-	Tip *ConsensusTip
+	Tip           *ConsensusTip
+	VoteSignature []byte `rlp:"optional"`
 }
 
 func (h *HighExtendTip) isHighExtend() {}

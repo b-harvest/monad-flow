@@ -8,8 +8,8 @@ import (
 type TimeoutMessage struct {
 	TMInfo               *TimeoutInfo
 	TimeoutSignature     []byte
-	HighExtend           HighExtendVote
-	LastRoundCertificate common.RoundCertificate `rlp:"optional"`
+	HighExtend           common.HighExtendWrapper
+	LastRoundCertificate *common.RoundCertificateWrapper `rlp:"optional"`
 }
 
 type TimeoutInfo struct {
@@ -18,20 +18,5 @@ type TimeoutInfo struct {
 	HighQCRound  util.Round
 	HighTipRound util.Round
 }
-
-type HighExtendVote interface {
-	isHighExtendVote()
-}
-
-type HighExtendVoteTip struct {
-	Tip *common.ConsensusTip
-	Sig []byte `rlp:"optional"` // Tip(tip, Option<Sig>)
-}
-type HighExtendVoteQc struct {
-	QC *common.QuorumCertificate
-}
-
-func (h *HighExtendVoteTip) isHighExtendVote() {}
-func (h *HighExtendVoteQc) isHighExtendVote()  {}
 
 func (*TimeoutMessage) IsProtocolMessage() {}
