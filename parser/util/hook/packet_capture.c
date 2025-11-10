@@ -8,7 +8,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-#define MAX_PKT_SIZE 16383
+#define MAX_PKT_SIZE 65535
 
 struct pkt_sample {
     __u32 len;
