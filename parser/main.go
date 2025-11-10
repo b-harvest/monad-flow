@@ -79,6 +79,7 @@ func main() {
 
 			stride := mtu - (int(realLen) - len(packet.Payload) - (int(realLen) - int(packet.IPv4Layer.Length)))
 			if stride <= 0 {
+				log.Printf("Invalid stride : %d = %d - (%d - %d - (%d - %d))", stride, mtu, int(realLen), len(packet.Payload), int(realLen), int(packet.IPv4Layer.Length))
 				log.Fatalf("Invalid MTU (%d), calculated stride is %d", mtu, stride)
 			}
 
