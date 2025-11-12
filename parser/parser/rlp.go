@@ -43,54 +43,13 @@ func HandleDecodedMessage(data []byte) error {
 		case util.ConsensusMsgType:
 			return handleConsensusMessage(monadMsg.Payload)
 		case util.BlockSyncRequestMsgType:
-			req, err := block_sync_request.HandleBlockSyncRequest(monadMsg.Payload)
-			if err != nil {
-				return err
-			}
-			if req.IsHeaders {
-				log.Printf("    L5 Type: Headers Request - LastBlockID: %s,  NumBlocks: %d", req.Headers.LastBlockID.Hex(), req.Headers.NumBlocks)
-			} else if req.IsPayload {
-				log.Printf("    L5 Type: Payload Request - PayloadID: %s", req.Payload.Hex())
-			}
+			return handleBlockSyncRequest(monadMsg.Payload)
 		case util.BlockSyncResponseMsgType:
-			resp, err := block_sync_response.HandleBlockSyncResponse(monadMsg.Payload)
-			if err != nil {
-				return err
-			}
-			if resp.IsHeadersResponse {
-				if resp.HeadersData.IsFound {
-					log.Printf("    L5/L6 Type: HeadersResponse (Found)")
-					log.Printf("      Range: %d blocks, last ID %s", resp.HeadersData.FoundRange.NumBlocks, resp.HeadersData.FoundRange.LastBlockID.Hex())
-					log.Printf("      Headers Rcvd: %d", len(resp.HeadersData.FoundHeaders))
-				} else if resp.HeadersData.IsNotAvailable {
-					log.Printf("    L5/L6 Type: HeadersResponse (NotAvailable)")
-					log.Printf("      Range: %d blocks, last ID %s", resp.HeadersData.NotAvailRange.NumBlocks, resp.HeadersData.NotAvailRange.LastBlockID.Hex())
-				}
-			} else if resp.IsPayloadResponse {
-				if resp.PayloadData.IsFound {
-					log.Printf("    L5/L6 Type: PayloadResponse (Found)")
-					log.Printf("      Transaction len: %d", len(resp.PayloadData.FoundBody.ExecutionBody.Transactions))
-				} else if resp.PayloadData.IsNotAvailable {
-					log.Printf("    L5/L6 Type: PayloadResponse (NotAvailable)")
-					log.Printf("      PayloadID: %s", resp.PayloadData.NotAvailPayload.Hex())
-				}
-			}
+			return handleBlockSyncResponse(monadMsg.Payload)
 		case util.ForwardedTxMsgType:
 			return handleForwardedTx(monadMsg.Payload)
 		case util.StateSyncMsgType:
-			msg, err := state_sync.HandleStateSyncMessage(monadMsg.Payload)
-			if err != nil {
-				return err
-			}
-			if msg.IsRequest {
-				log.Printf("    L5/L6 Type: StateSync Request (v%d.%d)", msg.Request.Version.Major, msg.Request.Version.Minor)
-			} else if msg.IsResponse {
-				log.Printf("    L5/L6 Type: StateSync Response (v%d.%d), %d upserts", msg.Response.Version.Major, msg.Response.Version.Minor, len(msg.Response.Response))
-			} else if msg.IsBadVersion {
-				log.Printf("    L5/L6 Type: StateSync BadVersion")
-			} else if msg.IsCompletion {
-				log.Printf("    L5/L6 Type: StateSync Completion (Session: %d)", msg.Completion)
-			}
+			return handleStateSyncMessage(monadMsg.Payload)
 		default:
 			return fmt.Errorf("unknown MonadMessage TypeID: %d", monadMsg.TypeID)
 		}
@@ -112,22 +71,76 @@ func HandleDecodedMessage(data []byte) error {
 	default:
 		return fmt.Errorf("unknown OutboundRouter MessageType: %d", outboundRouterMsg.MessageType)
 	}
+}
 
+func handleBlockSyncRequest(payload []byte) error {
+	req, err := block_sync_request.HandleBlockSyncRequest(payload)
+	if err != nil {
+		return err
+	}
+	if req.IsHeaders {
+		log.Printf("    L5 Type: Headers Request - LastBlockID: %s,  NumBlocks: %d", req.Headers.LastBlockID.Hex(), req.Headers.NumBlocks)
+	} else if req.IsPayload {
+		log.Printf("    L5 Type: Payload Request - PayloadID: %s", req.Payload.Hex())
+	}
+	return nil
+}
+
+func handleBlockSyncResponse(payload []byte) error {
+	resp, err := block_sync_response.HandleBlockSyncResponse(payload)
+	if err != nil {
+		return err
+	}
+	if resp.IsHeadersResponse {
+		if resp.HeadersData.IsFound {
+			log.Printf("    L5/L6 Type: HeadersResponse (Found)")
+			log.Printf("      Range: %d blocks, last ID %s", resp.HeadersData.FoundRange.NumBlocks, resp.HeadersData.FoundRange.LastBlockID.Hex())
+			log.Printf("      Headers Rcvd: %d", len(resp.HeadersData.FoundHeaders))
+		} else if resp.HeadersData.IsNotAvailable {
+			log.Printf("    L5/L6 Type: HeadersResponse (NotAvailable)")
+			log.Printf("      Range: %d blocks, last ID %s", resp.HeadersData.NotAvailRange.NumBlocks, resp.HeadersData.NotAvailRange.LastBlockID.Hex())
+		}
+	} else if resp.IsPayloadResponse {
+		if resp.PayloadData.IsFound {
+			log.Printf("    L5/L6 Type: PayloadResponse (Found)")
+			log.Printf("      Transaction len: %d", len(resp.PayloadData.FoundBody.ExecutionBody.Transactions))
+		} else if resp.PayloadData.IsNotAvailable {
+			log.Printf("    L5/L6 Type: PayloadResponse (NotAvailable)")
+			log.Printf("      PayloadID: %s", resp.PayloadData.NotAvailPayload.Hex())
+		}
+	}
+	return nil
+}
+
+func handleStateSyncMessage(payload []byte) error {
+	msg, err := state_sync.HandleStateSyncMessage(payload)
+	if err != nil {
+		return err
+	}
+	if msg.IsRequest {
+		log.Printf("    L5/L6 Type: StateSync Request (v%d.%d)", msg.Request.Version.Major, msg.Request.Version.Minor)
+	} else if msg.IsResponse {
+		log.Printf("    L5/L6 Type: StateSync Response (v%d.%d), %d upserts", msg.Response.Version.Major, msg.Response.Version.Minor, len(msg.Response.Response))
+	} else if msg.IsBadVersion {
+		log.Printf("    L5/L6 Type: StateSync BadVersion")
+	} else if msg.IsCompletion {
+		log.Printf("    L5/L6 Type: StateSync Completion (Session: %d)", msg.Completion)
+	}
 	return nil
 }
 
 func handlePeerDiscoveryMessage(msg peer_discovery.PeerDiscoveryMessage) error {
 	switch m := msg.(type) {
 	case *peer_discovery.Ping:
-		// log.Println("[RLP-PARSE] -> It's a Ping")
+		log.Println("[RLP-PARSE] -> It's a Ping")
 	case *peer_discovery.Pong:
-		// log.Println("[RLP-PARSE] -> It's a Pong")
+		log.Println("[RLP-PARSE] -> It's a Pong")
 	case *peer_discovery.PeerLookupRequest:
-		// log.Println("[RLP-PARSE] -> It's a PeerLookupRequest")
+		log.Println("[RLP-PARSE] -> It's a PeerLookupRequest")
 	case *peer_discovery.PeerLookupResponse:
-		// log.Println("[RLP-PARSE] -> It's a PeerLookupResponse")
+		log.Println("[RLP-PARSE] -> It's a PeerLookupResponse")
 	case *peer_discovery.FullNodeRaptorcastRequest:
-		// log.Println("[RLP-PARSE] -> It's a FullNodeRaptorcastRequest")
+		log.Println("[RLP-PARSE] -> It's a FullNodeRaptorcastRequest")
 	case *peer_discovery.FullNodeRaptorcastResponse:
 		log.Println("[RLP-PARSE] -> It's a FullNodeRaptorcastResponse")
 	default:
@@ -140,11 +153,11 @@ func handlePeerDiscoveryMessage(msg peer_discovery.PeerDiscoveryMessage) error {
 func handleFullNodesGroupMessage(msg fullnode_group.FullNodesGroupMessage) error {
 	switch m := msg.(type) {
 	case *fullnode_group.PrepareGroup:
-		// log.Println("[RLP-PARSE] -> It's a PrepareGroup")
+		log.Println("[RLP-PARSE] -> It's a PrepareGroup")
 	case *fullnode_group.PrepareGroupResponse:
-		// log.Println("[RLP-PARSE] -> It's a PrepareGroupResponse")
+		log.Println("[RLP-PARSE] -> It's a PrepareGroupResponse")
 	case *fullnode_group.ConfirmGroup:
-		// log.Println("[RLP-PARSE] -> It's a ConfirmGroup")
+		log.Println("[RLP-PARSE] -> It's a ConfirmGroup")
 	default:
 		return fmt.Errorf("unknown FullNodesGroupMessage concrete type: %T", m)
 	}
@@ -160,13 +173,13 @@ func handleConsensusMessage(payload []byte) error {
 
 	switch msg := consensusMsg.Message.(type) {
 	case *proposal.ProposalMessage:
-		// log.Printf("[RLP-PARSE]   -> IT'S A PROPOSAL! Round: %d, Epoch: %d", msg.ProposalRound, msg.ProposalEpoch)
+		log.Printf("[RLP-PARSE]   -> IT'S A PROPOSAL! Round: %d, Epoch: %d", msg.ProposalRound, msg.ProposalEpoch)
 	case *vote.VoteMessage:
-		// log.Printf("[RLP-PARSE]   -> IT'S A VOTE! Round: %d, BlockID: %s", msg.Vote.Round, msg.Vote.ID.String())
+		log.Printf("[RLP-PARSE]   -> IT'S A VOTE! Round: %d, BlockID: %s", msg.Vote.Round, msg.Vote.ID.String())
 	case *timeout.TimeoutMessage:
-		// log.Printf("[RLP-PARSE]   -> IT'S A TIMEOUT! Round: %d, Epoch: %d", msg.TMInfo.Round, msg.TMInfo.Epoch)
+		log.Printf("[RLP-PARSE]   -> IT'S A TIMEOUT! Round: %d, Epoch: %d", msg.TMInfo.Round, msg.TMInfo.Epoch)
 	case *round_recovery.RoundRecoveryMessage:
-		// log.Printf("[RLP-PARSE]   -> IT'S A ROUND RECOVERY! Round: %d, Epoch: %d", msg.Round, msg.Epoch)
+		log.Printf("[RLP-PARSE]   -> IT'S A ROUND RECOVERY! Round: %d, Epoch: %d", msg.Round, msg.Epoch)
 	case *no_endorsement.NoEndorsementMessage:
 		log.Printf("[RLP-PARSE]   -> IT'S A NO ENDORSEMENT! Round: %d, Epoch: %d", msg.Msg.Round, msg.Msg.Epoch)
 	case *advanced_round.AdvanceRoundMessage:
@@ -181,7 +194,7 @@ func handleConsensusMessage(payload []byte) error {
 func handleAdvancedRound(msg *advanced_round.AdvanceRoundMessage) error {
 	switch arm := msg.LastRoundCertificate.Certificate.(type) {
 	case *common.RoundCertificateQC:
-		// log.Printf("[RLP-PARSE]   -> IT'S AN ADVANCE ROUND! QC round: %d", arm.QC.Info.Round)
+		log.Printf("[RLP-PARSE]   -> IT'S AN ADVANCE ROUND! QC round: %d", arm.QC.Info.Round)
 	case *common.RoundCertificateTC:
 		log.Printf("[RLP-PARSE]   -> IT'S AN ADVANCE ROUND! TC round: %d", arm.TC.Round)
 	}
@@ -193,13 +206,13 @@ func handleForwardedTx(payload []byte) error {
 	if err := rlp.Decode(bytes.NewReader(payload), &forwardedTxMsg); err != nil {
 		return fmt.Errorf("stage 2 (ForwardedTxMessage) decode failed: %w", err)
 	}
-	// log.Printf("[RLP-PARSE]   -> IT'S AN FORWARDEDTX! (Total Txs: %d)", len(forwardedTxMsg))
-	// for i, tx := range forwardedTxMsg {
-	// 	end := 10
-	// 	if len(tx) < 10 {
-	// 		end = len(tx)
-	// 	}
-	// 	log.Printf("[RLP-PARSE]     -> Tx[%d] (First %dB): %x...", i, end, tx[:end])
-	// }
+	log.Printf("[RLP-PARSE]   -> IT'S AN FORWARDEDTX! (Total Txs: %d)", len(forwardedTxMsg))
+	for i, tx := range forwardedTxMsg {
+		end := 10
+		if len(tx) < 10 {
+			end = len(tx)
+		}
+		log.Printf("[RLP-PARSE]     -> Tx[%d] (First %dB): %x...", i, end, tx[:end])
+	}
 	return nil
 }
