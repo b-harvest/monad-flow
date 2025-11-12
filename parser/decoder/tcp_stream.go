@@ -72,38 +72,3 @@ func (s *MonadTcpStream) run() {
 		}
 	}
 }
-
-// func (s *MonadTcpStream) run() {
-// 	log.Printf("[TCP Reassembly] 스트림 핸들러 시작: %s", s.net.Src())
-// 	defer log.Printf("[TCP Reassembly] 스트림 핸들러 종료: %s", s.net.Src())
-
-// 	for {
-// 		select {
-// 		case <-s.ctx.Done():
-// 			log.Printf("[TCP Reassembly] Context 종료 신호 감지. 스트림 핸들러(%s) 종료.", s.net.Src())
-// 			return
-// 		default:
-// 		}
-
-// 		hdr, err := common.ReadTcpMsgHdr(&s.r)
-// 		if err != nil {
-// 			if err == io.EOF || err == io.ErrUnexpectedEOF || errors.Is(err, io.ErrClosedPipe) {
-// 				log.Printf("[L1] 스트림 정상 종료 (EOF/Closed): %s", s.net.Src())
-// 				return
-// 			}
-// 			log.Printf("[L1] SSNC 헤더 읽기 실패: %v", err)
-// 			return
-// 		}
-
-// 		log.Printf("[L1] Magic: %x, Version: %d, Length: %d", hdr.Magic, hdr.Version, hdr.Length)
-
-// 		payload := make([]byte, hdr.Length)
-// 		n, err := io.ReadFull(&s.r, payload)
-// 		if err != nil {
-// 			log.Printf("[REASSEMBLY FAILED] 페이로드 읽기 실패: %v (Expected %d bytes, Got %d)", err, hdr.Length, n)
-// 			return
-// 		}
-
-// 		log.Printf("[REASSEMBLY SUCCESS] %d 바이트 메시지 전체 수신 완료 (스트림: %s)", hdr.Length, s.net.Src())
-// 	}
-// }
