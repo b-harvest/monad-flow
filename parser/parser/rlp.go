@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"monad-flow/model/message/monad"
+	"monad-flow/model/message/monad/block_sync_request"
+	"monad-flow/model/message/monad/block_sync_response"
 	"monad-flow/model/message/monad/consensus"
 	"monad-flow/model/message/monad/forwarded_tx"
 	"monad-flow/model/message/outbound_router"
@@ -40,13 +42,42 @@ func HandleDecodedMessage(data []byte) error {
 		case util.ConsensusMsgType:
 			return handleConsensusMessage(monadMsg.Payload)
 		case util.BlockSyncRequestMsgType:
-			log.Println("[RLP-PARSE] Handling BlockSyncRequest (Type 2)... (not implemented)")
+			req, err := block_sync_request.HandleBlockSyncRequest(monadMsg.Payload)
+			if err != nil {
+				return err
+			}
+			if req.IsHeaders {
+				log.Printf("    L5 Type: Headers Request - LastBlockID: %s,  NumBlocks: %d", req.Headers.LastBlockID.Hex(), req.Headers.NumBlocks)
+			} else if req.IsPayload {
+				log.Printf("    L5 Type: Payload Request - PayloadID: %s", req.Payload.Hex())
+			}
 		case util.BlockSyncResponseMsgType:
-			log.Println("[RLP-PARSE] Handling BlockSyncResponse (Type 3)... (not implemented)")
+			resp, err := block_sync_response.HandleBlockSyncResponse(monadMsg.Payload)
+			if err != nil {
+				return err
+			}
+			if resp.IsHeadersResponse {
+				if resp.HeadersData.IsFound {
+					log.Printf("    L5/L6 Type: HeadersResponse (Found)")
+					log.Printf("      Range: %d blocks, last ID %s", resp.HeadersData.FoundRange.NumBlocks, resp.HeadersData.FoundRange.LastBlockID.Hex())
+					log.Printf("      Headers Rcvd: %d", len(resp.HeadersData.FoundHeaders))
+				} else if resp.HeadersData.IsNotAvailable {
+					log.Printf("    L5/L6 Type: HeadersResponse (NotAvailable)")
+					log.Printf("      Range: %d blocks, last ID %s", resp.HeadersData.NotAvailRange.NumBlocks, resp.HeadersData.NotAvailRange.LastBlockID.Hex())
+				}
+			} else if resp.IsPayloadResponse {
+				if resp.PayloadData.IsFound {
+					log.Printf("    L5/L6 Type: PayloadResponse (Found)")
+					log.Printf("      Transaction len: %d", len(resp.PayloadData.FoundBody.ExecutionBody.Transactions))
+				} else if resp.PayloadData.IsNotAvailable {
+					log.Printf("    L5/L6 Type: PayloadResponse (NotAvailable)")
+					log.Printf("      PayloadID: %s", resp.PayloadData.NotAvailPayload.Hex())
+				}
+			}
 		case util.ForwardedTxMsgType:
 			return handleForwardedTx(monadMsg.Payload)
-		case util.AdvanceRoundMsgType:
-			log.Println("[RLP-PARSE] Handling StateSyncMessage (Type 5)... (not implemented)")
+		case util.StateSyncMsgType:
+			// log.Println("[RLP-PARSE] Handling StateSyncMessage (Type 5)... (not implemented)")
 		default:
 			return fmt.Errorf("unknown MonadMessage TypeID: %d", monadMsg.TypeID)
 		}

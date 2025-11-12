@@ -37,6 +37,24 @@ const (
 )
 
 const (
+	HeaderMagic   = 0x434e5353 // "SSNC"
+	HeaderSize    = 16
+	SignatureSize = 65 // L2: 65바이트 서명
+
+	BlockSyncReqMsgName       = "BlockSyncRequestMessage"
+	BlockSyncResMsgName       = "BlockSyncResponseMessage"
+	BlockSyncHdrResName       = "BlockSyncHeadersResponse"
+	BlockSyncBdyResName       = "BlockSyncBodyResponse"
+	BlockSyncHeaderType uint8 = 1
+	BlockSyncBodyType   uint8 = 2
+)
+
+const (
+	Found        = 1
+	NotAvailable = 2
+)
+
+const (
 	QC = 1
 	TC = 2
 )
