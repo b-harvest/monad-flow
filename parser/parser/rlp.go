@@ -9,6 +9,7 @@ import (
 	"monad-flow/model/message/monad/block_sync_response"
 	"monad-flow/model/message/monad/consensus"
 	"monad-flow/model/message/monad/forwarded_tx"
+	"monad-flow/model/message/monad/state_sync"
 	"monad-flow/model/message/outbound_router"
 	"monad-flow/model/message/outbound_router/fullnode_group"
 	"monad-flow/model/message/outbound_router/peer_discovery"
@@ -77,7 +78,19 @@ func HandleDecodedMessage(data []byte) error {
 		case util.ForwardedTxMsgType:
 			return handleForwardedTx(monadMsg.Payload)
 		case util.StateSyncMsgType:
-			// log.Println("[RLP-PARSE] Handling StateSyncMessage (Type 5)... (not implemented)")
+			msg, err := state_sync.HandleStateSyncMessage(monadMsg.Payload)
+			if err != nil {
+				return err
+			}
+			if msg.IsRequest {
+				log.Printf("    L5/L6 Type: StateSync Request (v%d.%d)", msg.Request.Version.Major, msg.Request.Version.Minor)
+			} else if msg.IsResponse {
+				log.Printf("    L5/L6 Type: StateSync Response (v%d.%d), %d upserts", msg.Response.Version.Major, msg.Response.Version.Minor, len(msg.Response.Response))
+			} else if msg.IsBadVersion {
+				log.Printf("    L5/L6 Type: StateSync BadVersion")
+			} else if msg.IsCompletion {
+				log.Printf("    L5/L6 Type: StateSync Completion (Session: %d)", msg.Completion)
+			}
 		default:
 			return fmt.Errorf("unknown MonadMessage TypeID: %d", monadMsg.TypeID)
 		}

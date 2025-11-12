@@ -50,6 +50,14 @@ const (
 )
 
 const (
+	StateSyncMsgName       = "StateSyncNetworkMessage"
+	TypeRequest      uint8 = 1
+	TypeResponse     uint8 = 2
+	TypeBadVersion   uint8 = 3
+	TypeCompletion   uint8 = 4
+)
+
+const (
 	Found        = 1
 	NotAvailable = 2
 )
