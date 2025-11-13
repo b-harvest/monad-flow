@@ -54,11 +54,12 @@ func main() {
 	streamPool := tcpassembly.NewStreamPool(streamFactory)
 	assembler := tcpassembly.NewAssembler(streamPool)
 	var assemblerMutex sync.Mutex
+	var udpMutex sync.Mutex
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
@@ -67,7 +68,7 @@ func main() {
 				return
 			case <-ticker.C:
 				assemblerMutex.Lock()
-				flushed, closed := assembler.FlushOlderThan(time.Now().Add(-50 * time.Millisecond))
+				flushed, closed := assembler.FlushOlderThan(time.Now().Add(-1 * time.Second))
 				assemblerMutex.Unlock()
 				if flushed > 0 || closed > 0 {
 					log.Printf("[TCP Reassembly] Assembler Flush: %d flushed, %d closed", flushed, closed)
@@ -112,14 +113,8 @@ func main() {
 				log.Println("Received invalid sample (too small)")
 				continue
 			}
-
-			// 1. 실제 패킷 길이(len 필드)를 읽습니다.
 			realLen := binary.LittleEndian.Uint32(record.RawSample[0:4])
-
-			// 2. 4바이트 이후의 데이터(data 필드)를 가져옵니다.
 			pktData := record.RawSample[4:]
-
-			// 3. 실제 덤프할 길이를 계산합니다.
 			dumpLen := int(realLen)
 			if dumpLen > len(pktData) {
 				dumpLen = len(pktData)
@@ -128,6 +123,8 @@ func main() {
 			packet := parser.ParsePacket(pktData[:dumpLen])
 
 			if packet.TCPLayer != nil {
+				packet.NetworkHexDump()
+				util.ApplicationHexDump(packet.Payload)
 				assemblerMutex.Lock()
 				assembler.AssembleWithTimestamp(
 					packet.IPv4Layer.NetworkFlow(),
@@ -136,41 +133,11 @@ func main() {
 				)
 				assemblerMutex.Unlock()
 			} else if packet.UDPLayer != nil {
-				stride := mtu - (int(realLen) - len(packet.Payload) - (int(realLen) - int(packet.IPv4Layer.Length)))
-				if stride <= 0 {
-					log.Printf("Invalid stride : %d = %d - (%d - %d - (%d - %d))", stride, mtu, int(realLen), len(packet.Payload), int(realLen), int(packet.IPv4Layer.Length))
-					log.Fatalf("Invalid MTU (%d), calculated stride is %d", mtu, stride)
-				}
-
-				if packet.Payload == nil {
-					continue
-				}
-
 				l7Payload := packet.Payload
-				offset := 0
-				for offset < len(l7Payload) {
-					remainingLen := len(l7Payload) - offset
-					currentStride := stride // .env에서 계산한 Stride
-
-					if remainingLen < currentStride {
-						currentStride = remainingLen
-					}
-
-					chunkData := l7Payload[offset : offset+currentStride]
-					offset += currentStride
-
-					data, err := processChunk(decoderCache, chunkData)
-
-					if err != nil {
-						log.Printf("Failed to process chunk: %v", err)
-						continue
-					}
-					if data != nil {
-						if err := parser.HandleDecodedMessage(data); err != nil {
-							log.Printf("[RLP-ERROR] Failed to decode message: %v", err)
-						}
-					}
-				}
+				currentMTU := mtu
+				currentRealLen := int(realLen)
+				currentIPv4Len := int(packet.IPv4Layer.Length)
+				go processUdpPacket(decoderCache, &udpMutex, l7Payload, currentMTU, currentRealLen, currentIPv4Len)
 			}
 		}
 	}()
@@ -190,6 +157,52 @@ func main() {
 	log.Println("Waiting for all goroutines to stop...")
 	wg.Wait()
 	log.Println("Shutdown complete.")
+}
+
+func processUdpPacket(
+	decoderCache *decoder.DecoderCache,
+	udpMutex *sync.Mutex,
+	l7Payload []byte,
+	mtu int,
+	realLen int,
+	ipv4Len int,
+) {
+	if l7Payload == nil {
+		return
+	}
+
+	stride := mtu - (realLen - len(l7Payload) - (realLen - ipv4Len))
+	if stride <= 0 {
+		log.Printf("Invalid stride : %d", stride)
+		return
+	}
+
+	offset := 0
+	for offset < len(l7Payload) {
+		remainingLen := len(l7Payload) - offset
+		currentStride := stride
+
+		if remainingLen < currentStride {
+			currentStride = remainingLen
+		}
+
+		chunkData := l7Payload[offset : offset+currentStride]
+		offset += currentStride
+
+		udpMutex.Lock()
+		data, err := processChunk(decoderCache, chunkData)
+		if err != nil {
+			log.Printf("Failed to process chunk: %v", err)
+			udpMutex.Unlock()
+			continue
+		}
+		if data != nil {
+			if err := parser.HandleDecodedMessage(data); err != nil {
+				log.Printf("[RLP-ERROR] Failed to decode message: %v", err)
+			}
+		}
+		udpMutex.Unlock()
+	}
 }
 
 func getMTU() int {
