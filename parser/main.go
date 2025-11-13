@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"monad-flow/decoder"
+	"monad-flow/model"
 	"monad-flow/parser"
 	"monad-flow/util"
 
@@ -56,6 +57,29 @@ func main() {
 	var assemblerMutex sync.Mutex
 	var udpMutex sync.Mutex
 
+	tcpChan := make(chan *model.Packet, 10000)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.Println("[TCP Worker] Started.")
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("[TCP Worker] Shutting down.")
+				return
+			case packet := <-tcpChan:
+				assemblerMutex.Lock()
+				assembler.AssembleWithTimestamp(
+					packet.IPv4Layer.NetworkFlow(),
+					packet.TCPLayer,
+					time.Now(),
+				)
+				assemblerMutex.Unlock()
+			}
+		}
+	}()
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -64,14 +88,14 @@ func main() {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("[Ticker] Ticker goroutine shutting down.")
+				log.Println("[Ticker] Shutting down.")
 				return
 			case <-ticker.C:
 				assemblerMutex.Lock()
 				flushed, closed := assembler.FlushOlderThan(time.Now().Add(-1 * time.Second))
 				assemblerMutex.Unlock()
 				if flushed > 0 || closed > 0 {
-					log.Printf("[TCP Reassembly] Assembler Flush: %d flushed, %d closed", flushed, closed)
+					log.Printf("[TCP Reassembly] Flush: %d flushed, %d closed", flushed, closed)
 				}
 			}
 		}
@@ -96,12 +120,7 @@ func main() {
 					log.Println("Ring buffer closed")
 					return
 				}
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-				log.Printf("Error reading from ring buffer: %v", err)
+				log.Printf("Error reading ringbuf: %v", err)
 				continue
 			}
 
@@ -123,15 +142,11 @@ func main() {
 			packet := parser.ParsePacket(pktData[:dumpLen])
 
 			if packet.TCPLayer != nil {
-				packet.NetworkHexDump()
-				util.ApplicationHexDump(packet.Payload)
-				assemblerMutex.Lock()
-				assembler.AssembleWithTimestamp(
-					packet.IPv4Layer.NetworkFlow(),
-					packet.TCPLayer,
-					time.Now(),
-				)
-				assemblerMutex.Unlock()
+				select {
+				case tcpChan <- &packet:
+				default:
+					log.Println("[WARN] TCP Channel full, dropping packet")
+				}
 			} else if packet.UDPLayer != nil {
 				l7Payload := packet.Payload
 				currentMTU := mtu
@@ -144,18 +159,14 @@ func main() {
 
 	<-ctx.Done()
 
-	log.Println("Stopping Monad packet parser...")
-	log.Println("Closing eBPF monitor...")
-	if err := monitor.Close(); err != nil {
-		log.Printf("Warning: error closing monitor: %v", err)
-	}
-	log.Println("Closing all active TCP streams forcefully...")
-	assemblerMutex.Lock()
-	flushed, closed := assembler.FlushOlderThan(time.Now())
-	assemblerMutex.Unlock()
-	log.Printf("[TCP Reassembly] Final Flush: %d flushed, %d closed", flushed, closed)
-	log.Println("Waiting for all goroutines to stop...")
+	log.Println("Stopping parser...")
+	monitor.Close()
+	log.Println("Waiting for workers...")
 	wg.Wait()
+	log.Println("Closing TCP streams...")
+	assemblerMutex.Lock()
+	assembler.FlushOlderThan(time.Now())
+	assemblerMutex.Unlock()
 	log.Println("Shutdown complete.")
 }
 
