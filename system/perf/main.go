@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	// Sleep을 사용하진 않지만, 혹시 나중에 짧게 쓸 수 있으니 놔둡니다.
 )
 
 func runCommand(name string, args ...string) {
+	// ... (이전과 동일) ...
 	fmt.Printf("\n--- [실행]: %s %v ---\n", name, args)
 
 	cmd := exec.Command(name, args...)
 
 	output, err := cmd.CombinedOutput()
 
-	if args[1] == "latency" || args[1] == "timehist" || name == "offcputime" {
+	if len(args) > 1 && (args[1] == "latency" || args[1] == "timehist" || name == "offcputime") {
 		fmt.Println(string(output))
 	}
 
@@ -23,25 +25,41 @@ func runCommand(name string, args ...string) {
 }
 
 func main() {
-	// 1. 이 프로그램은 sudo/root 권한이 필요합니다.
+	// ... (권한 및 PID 인자 확인 부분은 이전과 동일) ...
 	if os.Geteuid() != 0 {
 		fmt.Println("이 프로그램은 sudo 또는 root 권한으로 실행해야 합니다.")
-		fmt.Println("예: sudo go run .")
 		os.Exit(1)
 	}
+
+	if len(os.Args) < 2 {
+		fmt.Println("모니터링할 PID를 인자로 전달해야 합니다.")
+		fmt.Println("예: sudo go run . 12345")
+		os.Exit(1)
+	}
+	pid := os.Args[1]
+	fmt.Printf("--- [PID %s] 모니터링 시작 ---\n", pid)
+
 	const perfDataFile = "./perf.data"
 
-	// 2. [명령어 1] offcputime 실행
-	runCommand("offcputime", "-p", "2052396", "1")
+	// 3. 무한 루프 시작
+	for {
+		fmt.Println("--- [새 사이클 시작] ---")
 
-	// 3. [명령어 2] perf sched record 실행
-	runCommand("perf", "sched", "record", "-p", "2052396", "-o", perfDataFile, "sleep", "0.1")
+		// 4. [명령어 1] offcputime 실행 (1초 소요)
+		runCommand("offcputime", "-p", pid, "1")
 
-	// 4. [명령어 3] perf sched latency 실행
-	runCommand("perf", "sched", "latency", "-i", perfDataFile)
+		// 5. [명령어 2] perf sched record 실행 (0.1초 소요)
+		runCommand("perf", "sched", "record", "-p", pid, "-o", perfDataFile, "sleep", "0.1")
 
-	// 5. [명령어 4] perf sched timehist 실행
-	runCommand("perf", "sched", "timehist", "-i", perfDataFile)
+		// 6. [명령어 3] perf sched latency 실행
+		runCommand("perf", "sched", "latency", "-i", perfDataFile)
 
-	fmt.Println("\n--- [모든 명령어 실행 완료] ---")
+		// 7. [명령어 4] perf sched timehist 실행
+		runCommand("perf", "sched", "timehist", "-i", perfDataFile)
+
+		fmt.Printf("\n--- [사이클 완료] 즉시 다음 사이클을 시작합니다 ... (Ctrl+C로 종료) ---\n\n")
+
+		// 8. 2초 대기 라인 삭제!
+		// time.Sleep(2 * time.Second)
+	}
 }
