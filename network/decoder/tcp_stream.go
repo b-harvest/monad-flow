@@ -7,25 +7,32 @@ import (
 	"log"
 	"monad-flow/model/message/monad/common"
 	"monad-flow/parser"
+	"sync"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/google/gopacket/tcpassembly/tcpreader"
+
+	socketio "github.com/zishang520/socket.io/clients/socket/v3"
 )
 
 const readTimeout = 10 * time.Second
 
 type MonadTcpStreamFactory struct {
-	Ctx context.Context
+	Ctx         context.Context
+	Client      *socketio.Socket
+	ClientMutex *sync.Mutex
 }
 
 func (f *MonadTcpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream {
 	s := &MonadTcpStream{
-		net:       net,
-		transport: transport,
-		r:         tcpreader.NewReaderStream(),
-		ctx:       f.Ctx,
+		net:         net,
+		transport:   transport,
+		r:           tcpreader.NewReaderStream(),
+		ctx:         f.Ctx,
+		client:      f.Client,
+		clientMutex: f.ClientMutex,
 	}
 
 	go s.run()
@@ -37,6 +44,8 @@ type MonadTcpStream struct {
 	net, transport gopacket.Flow
 	r              tcpreader.ReaderStream
 	ctx            context.Context
+	client         *socketio.Socket
+	clientMutex    *sync.Mutex
 }
 
 func (s *MonadTcpStream) run() {
@@ -101,7 +110,7 @@ func (s *MonadTcpStream) run() {
 				return
 			}
 		}
-		if err := parser.HandleDecodedMessage(signedMsg.Payload); err != nil {
+		if err := parser.HandleDecodedMessage(signedMsg.Payload, s.client, s.clientMutex); err != nil {
 			log.Printf("[L3-L5] Message handler error: %v", err)
 		}
 	}

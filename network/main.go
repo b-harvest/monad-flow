@@ -21,10 +21,20 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/joho/godotenv"
+
+	socketio "github.com/zishang520/socket.io/clients/socket/v3"
 )
 
 func main() {
 	mtu := getMTU()
+
+	client, err := connectSocketIO()
+	if err != nil {
+		log.Fatalf("Failed to connect to Socket.IO: %v", err)
+	}
+	defer (*client).Close()
+	var clientMutex sync.Mutex
+	log.Println("Socket.IO client connected.")
 
 	if len(os.Args) < 2 {
 		log.Fatalf("Usage: sudo %s <interface-name>", os.Args[0])
@@ -51,7 +61,7 @@ func main() {
 	}()
 
 	decoderCache := decoder.NewDecoderCache()
-	streamFactory := &decoder.MonadTcpStreamFactory{Ctx: ctx}
+	streamFactory := &decoder.MonadTcpStreamFactory{Ctx: ctx, Client: client, ClientMutex: &clientMutex}
 	streamPool := tcpassembly.NewStreamPool(streamFactory)
 	assembler := tcpassembly.NewAssembler(streamPool)
 	var assemblerMutex sync.Mutex
@@ -152,7 +162,7 @@ func main() {
 				currentMTU := mtu
 				currentRealLen := int(realLen)
 				currentIPv4Len := int(packet.IPv4Layer.Length)
-				go processUdpPacket(decoderCache, &udpMutex, l7Payload, currentMTU, currentRealLen, currentIPv4Len)
+				go processUdpPacket(decoderCache, &udpMutex, l7Payload, currentMTU, currentRealLen, currentIPv4Len, client, &clientMutex)
 			}
 		}
 	}()
@@ -177,6 +187,8 @@ func processUdpPacket(
 	mtu int,
 	realLen int,
 	ipv4Len int,
+	client *socketio.Socket,
+	clientMutex *sync.Mutex,
 ) {
 	if l7Payload == nil {
 		return
@@ -201,19 +213,35 @@ func processUdpPacket(
 		offset += currentStride
 
 		udpMutex.Lock()
-		data, err := processChunk(decoderCache, chunkData)
+		_, err := processChunk(decoderCache, chunkData, client, clientMutex)
 		if err != nil {
 			log.Printf("Failed to process chunk: %v", err)
 			udpMutex.Unlock()
 			continue
 		}
-		if data != nil {
-			if err := parser.HandleDecodedMessage(data); err != nil {
-				log.Printf("[RLP-ERROR] Failed to decode message: %v", err)
-			}
-		}
 		udpMutex.Unlock()
 	}
+}
+
+func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte, client *socketio.Socket, clientMutex *sync.Mutex) ([]byte, error) {
+	chunk, err := parser.ParseMonadChunkPacket(chunkData, client, clientMutex)
+	if err != nil {
+		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
+	}
+
+	decodedMsg, err := decoderCache.HandleChunk(chunk)
+	if err != nil {
+		if !errors.Is(err, decoder.ErrDuplicateSymbol) {
+			return nil, fmt.Errorf("raptor processing error: %w", err)
+		}
+	}
+
+	if decodedMsg != nil {
+		if err := parser.HandleDecodedMessage(decodedMsg.Data, client, clientMutex); err != nil {
+			log.Printf("[RLP-ERROR] Failed to decode message: %v", err)
+		}
+	}
+	return nil, nil
 }
 
 func getMTU() int {
@@ -233,21 +261,29 @@ func getMTU() int {
 	return mtu
 }
 
-func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte) ([]byte, error) {
-	chunk, err := parser.ParseMonadChunkPacket(chunkData)
-	if err != nil {
-		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
+func connectSocketIO() (*socketio.Socket, error) {
+	godotenv.Load()
+	sioURL := os.Getenv("SOCKETIO_URL")
+
+	if sioURL == "" {
+		log.Println("SOCKETIO_URL not set in .env, using default http://127.0.0.1:3000")
+		sioURL = "http://127.0.0.1:3000"
 	}
 
-	decodedMsg, err := decoderCache.HandleChunk(chunk)
+	log.Printf("Connecting to Socket.IO: %s", sioURL)
+
+	client, err := socketio.Connect(sioURL, nil)
 	if err != nil {
-		if !errors.Is(err, decoder.ErrDuplicateSymbol) {
-			return nil, fmt.Errorf("raptor processing error: %w", err)
-		}
+		return nil, fmt.Errorf("failed to connect to Socket.IO: %w", err)
 	}
 
-	if decodedMsg != nil {
-		return decodedMsg.Data, nil
-	}
-	return nil, nil
+	client.On("connect", func(data ...any) {
+		log.Printf("Socket.IO connected successfully! ID: %s", client.Id())
+	})
+
+	client.On("error", func(err ...any) {
+		log.Printf("[Socket.IO ERROR] %v", err[0])
+	})
+
+	return client, nil
 }

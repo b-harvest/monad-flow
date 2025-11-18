@@ -4,9 +4,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"monad-flow/model"
+	"sync"
+
+	socketio "github.com/zishang520/socket.io/clients/socket/v3"
 )
 
-func ParseMonadChunkPacket(data []byte) (*model.MonadChunkPacket, error) {
+func ParseMonadChunkPacket(data []byte, client *socketio.Socket, clientMutex *sync.Mutex) (*model.MonadChunkPacket, error) {
 	if len(data) < 70 {
 		return nil, fmt.Errorf("data too short: expected at least 70 bytes, got %d", len(data))
 	}

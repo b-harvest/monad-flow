@@ -21,11 +21,13 @@ import (
 	"monad-flow/model/message/protocol/timeout"
 	"monad-flow/model/message/protocol/vote"
 	"monad-flow/util"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	socketio "github.com/zishang520/socket.io/clients/socket/v3"
 )
 
-func HandleDecodedMessage(data []byte) error {
+func HandleDecodedMessage(data []byte, client *socketio.Socket, sioMutex *sync.Mutex) error {
 	var outboundRouterMsg outbound_router.OutboundRouterMessage
 
 	if err := rlp.Decode(bytes.NewReader(data), &outboundRouterMsg); err != nil {
