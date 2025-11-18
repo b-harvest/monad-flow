@@ -23,7 +23,6 @@ services:
 networks:
   monad-flow-network:
     name: monad-flow-network
-    external: true
 
 volumes:
   mongodb-data:
