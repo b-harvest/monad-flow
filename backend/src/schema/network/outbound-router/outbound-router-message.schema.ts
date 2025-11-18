@@ -18,6 +18,7 @@ import {
   MonadMessage,
   MonadMessageSchema,
 } from './app-message/monad-message.schema';
+import { Document } from 'mongoose';
 
 @Schema()
 export class OutboundRouterMessage extends Document {

@@ -15,8 +15,6 @@ import { WebsocketEvent } from '../common/enum-definition';
 import { AppService } from '../app.service';
 
 @WebSocketGateway({
-  path: '/api/socket',
-  transports: ['websocket'],
   cors: { origin: '*' },
 })
 export class WebSocketHandler
@@ -49,10 +47,7 @@ export class WebSocketHandler
   }
 
   @SubscribeMessage(WebsocketEvent.CLIENT_EVENT)
-  async handleClient(
-    @MessageBody() data: any,
-    @ConnectedSocket() client: Socket,
-  ) {
+  async handleClient(@ConnectedSocket() client: Socket) {
     await client.join(WebsocketEvent.CLIENT_EVENT);
   }
 

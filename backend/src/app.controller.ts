@@ -4,10 +4,7 @@ import { AppService } from './app.service';
 
 @Controller('/api')
 export class AppController {
-  constructor(
-    @Inject('AppService')
-    private readonly appService: AppService,
-  ) {}
+  constructor(private readonly appService: AppService) {}
 
   @Get()
   async getAll(@Res() response: Response) {

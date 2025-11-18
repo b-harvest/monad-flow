@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OutboundRouterMessage } from './schema/network/outbound-router/outbound-router-message.schema';
-import { UDPEvent } from './common/enum-definition';
 
 @Injectable()
 export class AppService {
@@ -15,8 +14,6 @@ export class AppService {
 
   async createFromUDP(payload: any): Promise<void> {
     this.logger.log(`Received UDP event: ${JSON.stringify(payload)}`);
-    if (payload.type == UDPEvent.MONAD_CHUNK_PACKET) {
-    }
     const doc = new this.outboundRouterModel({
       version: {
         serializeVersion: 1,
@@ -30,7 +27,6 @@ export class AppService {
     });
 
     await doc.save();
-    this.logger.log(`Saved UDP Log: ${doc._id}`);
   }
 
   async getAll(): Promise<void> {}
