@@ -8,11 +8,6 @@ export class MonadChunkPacket extends Document {
    */
   @Prop({ type: Object })
   network?: {
-    ethernet?: {
-      srcMac: string;
-      dstMac: string;
-      ethType: string;
-    };
     ipv4?: {
       srcIp: string;
       dstIp: string;
@@ -26,7 +21,6 @@ export class MonadChunkPacket extends Document {
       srcPort: number;
       dstPort: number;
     };
-    payloadHex?: string; // Raw L7 payload hex
   };
 
   /**
@@ -40,6 +34,12 @@ export class MonadChunkPacket extends Document {
 
   @Prop({ required: true })
   flags: number;
+
+  @Prop({ required: true })
+  broadCast: boolean;
+
+  @Prop({ required: true })
+  secondaryBroadcast: boolean;
 
   @Prop({ required: true })
   merkleTreeDepth: number;
@@ -84,15 +84,9 @@ export class MonadChunkPacket extends Document {
   chunkId: number;
 
   /**
-   * Payload (hex string)
-   */
-  @Prop({ required: true })
-  payload: string;
-
-  /**
    * 이 패킷이 combine/조립되어 만들어진 higher-level message 추적용
    */
-  @Prop({ type: String, index: true })
+  @Prop({ type: String, index: true, sparse: true })
   combinedMessageId?: string;
 
   /**
