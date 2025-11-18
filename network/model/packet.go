@@ -6,7 +6,24 @@ import (
 	"github.com/google/gopacket/layers"
 )
 
+type MonadIP struct {
+	SrcIp    string
+	DstIp    string
+	Protocol string
+}
+
+type MonadPort struct {
+	SrcPort int
+	DstPort int
+}
+
+type MonadNetworkPacket struct {
+	Ipv4 MonadIP
+	Port MonadPort
+}
+
 type MonadChunkPacket struct {
+	Network MonadNetworkPacket
 	// 헤더 (Signature 이후)
 	Signature          [65]byte // Signature of sender
 	Version            uint16   // 2 bytes

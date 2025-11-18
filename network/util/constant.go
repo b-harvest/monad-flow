@@ -3,6 +3,11 @@ package util
 // --- 상수 테이블 (Constant Table) ---
 
 const (
+	UDP_EVENT = "UDP"
+	TCP_EVENT = "TCP"
+)
+
+const (
 	// SourceSymbolsMin은 K의 최소값입니다 (RFC 5053 섹션 5.2).
 	SourceSymbolsMin = 1
 	// SourceSymbolsMax는 K의 최대값입니다 (RFC 5053 섹션 5.1.2).

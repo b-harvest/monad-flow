@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -157,11 +158,10 @@ func main() {
 					log.Println("[WARN] TCP Channel full, dropping packet")
 				}
 			} else if packet.UDPLayer != nil {
-				l7Payload := packet.Payload
 				currentMTU := mtu
 				currentRealLen := int(realLen)
 				currentIPv4Len := int(packet.IPv4Layer.Length)
-				go processUdpPacket(decoderCache, &udpMutex, l7Payload, currentMTU, currentRealLen, currentIPv4Len, client, &clientMutex)
+				go processUdpPacket(decoderCache, &udpMutex, packet, currentMTU, currentRealLen, currentIPv4Len, client, &clientMutex)
 			}
 		}
 	}()
@@ -182,37 +182,37 @@ func main() {
 func processUdpPacket(
 	decoderCache *decoder.DecoderCache,
 	udpMutex *sync.Mutex,
-	l7Payload []byte,
+	packet model.Packet,
 	mtu int,
 	realLen int,
 	ipv4Len int,
 	client *socket.Socket,
 	clientMutex *sync.Mutex,
 ) {
-	if l7Payload == nil {
+	if packet.Payload == nil {
 		return
 	}
 
-	stride := mtu - (realLen - len(l7Payload) - (realLen - ipv4Len))
+	stride := mtu - (realLen - len(packet.Payload) - (realLen - ipv4Len))
 	if stride <= 0 {
 		log.Printf("Invalid stride : %d", stride)
 		return
 	}
 
 	offset := 0
-	for offset < len(l7Payload) {
-		remainingLen := len(l7Payload) - offset
+	for offset < len(packet.Payload) {
+		remainingLen := len(packet.Payload) - offset
 		currentStride := stride
 
 		if remainingLen < currentStride {
 			currentStride = remainingLen
 		}
 
-		chunkData := l7Payload[offset : offset+currentStride]
+		chunkData := packet.Payload[offset : offset+currentStride]
 		offset += currentStride
 
 		udpMutex.Lock()
-		_, err := processChunk(decoderCache, chunkData, client, clientMutex)
+		_, err := processChunk(decoderCache, packet, chunkData, client, clientMutex)
 		if err != nil {
 			log.Printf("Failed to process chunk: %v", err)
 			udpMutex.Unlock()
@@ -222,11 +222,26 @@ func processUdpPacket(
 	}
 }
 
-func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte, client *socket.Socket, clientMutex *sync.Mutex) ([]byte, error) {
-	chunk, err := parser.ParseMonadChunkPacket(chunkData, client, clientMutex)
+func processChunk(decoderCache *decoder.DecoderCache, packet model.Packet, chunkData []byte, client *socket.Socket, clientMutex *sync.Mutex) ([]byte, error) {
+	chunk, err := parser.ParseMonadChunkPacket(packet, chunkData, client, clientMutex)
 	if err != nil {
 		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
 	}
+
+	jsonData, err := json.Marshal(chunk)
+	if err != nil {
+		log.Printf("JSON marshaling failed: %s", err)
+		return nil, err
+	}
+
+	payload := map[string]interface{}{
+		"type": 0,
+		"data": json.RawMessage(jsonData),
+	}
+
+	clientMutex.Lock()
+	client.Emit(util.UDP_EVENT, payload)
+	clientMutex.Unlock()
 
 	decodedMsg, err := decoderCache.HandleChunk(chunk)
 	if err != nil {
@@ -269,21 +284,36 @@ func connectSocketIO() (*socket.Socket, error) {
 		sioURL = "http://127.0.0.1:3000"
 	}
 
-	log.Printf("Connecting to Socket.IO: %s", sioURL)
+	connectChan := make(chan struct{})
+	errChan := make(chan error, 1)
 
 	client, err := socket.Connect(sioURL, nil)
-
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Socket.IO: %w", err)
+		return nil, fmt.Errorf("failed to initiate Socket.IO connection: %w", err)
 	}
 
 	client.On("connect", func(data ...any) {
 		log.Printf("Socket.IO connected successfully! ID: %s", client.Id())
+		close(connectChan)
 	})
 
-	client.On("error", func(err ...any) {
-		log.Printf("[Socket.IO ERROR] %v", err[0])
+	client.On("connect_error", func(err ...any) {
+		log.Printf("[Socket.IO CONNECT_ERROR] %v", err[0])
+		select {
+		case errChan <- fmt.Errorf("socket.io connect_error: %v", err[0]):
+		default:
+		}
 	})
 
-	return client, nil
+	select {
+	case <-connectChan:
+		return client, nil
+
+	case err := <-errChan:
+		return nil, err
+
+	case <-time.After(10 * time.Second):
+		client.Close()
+		return nil, errors.New("socket.io connection timed out")
+	}
 }
