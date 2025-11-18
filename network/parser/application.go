@@ -6,14 +6,10 @@ import (
 	"monad-flow/model"
 	"sync"
 
-	socketio "github.com/zishang520/socket.io/clients/socket/v3"
+	"github.com/zishang520/socket.io/clients/socket/v3"
 )
 
-func ParseMonadChunkPacket(data []byte, client *socketio.Socket, clientMutex *sync.Mutex) (*model.MonadChunkPacket, error) {
-	if len(data) < 70 {
-		return nil, fmt.Errorf("data too short: expected at least 70 bytes, got %d", len(data))
-	}
-
+func ParseMonadChunkPacket(data []byte, client *socket.Socket, clientMutex *sync.Mutex) (*model.MonadChunkPacket, error) {
 	packet := &model.MonadChunkPacket{}
 	offset := 0
 
@@ -33,6 +29,8 @@ func ParseMonadChunkPacket(data []byte, client *socketio.Socket, clientMutex *sy
 		return nil, fmt.Errorf("unexpected end of data while parsing Flags")
 	}
 	packet.Flags = data[offset]
+	packet.Broadcast = (packet.Flags>>7)&0x01 == 1
+	packet.SecondaryBroadcast = (packet.Flags>>6)&0x01 == 1
 	packet.MerkleTreeDepth = packet.Flags & 0x0F
 	offset += 1
 

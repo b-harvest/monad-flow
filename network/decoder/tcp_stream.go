@@ -14,14 +14,14 @@ import (
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/google/gopacket/tcpassembly/tcpreader"
 
-	socketio "github.com/zishang520/socket.io/clients/socket/v3"
+	"github.com/zishang520/socket.io/clients/socket/v3"
 )
 
 const readTimeout = 10 * time.Second
 
 type MonadTcpStreamFactory struct {
 	Ctx         context.Context
-	Client      *socketio.Socket
+	Client      *socket.Socket
 	ClientMutex *sync.Mutex
 }
 
@@ -44,7 +44,7 @@ type MonadTcpStream struct {
 	net, transport gopacket.Flow
 	r              tcpreader.ReaderStream
 	ctx            context.Context
-	client         *socketio.Socket
+	client         *socket.Socket
 	clientMutex    *sync.Mutex
 }
 

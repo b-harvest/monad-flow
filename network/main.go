@@ -22,7 +22,7 @@ import (
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/joho/godotenv"
 
-	socketio "github.com/zishang520/socket.io/clients/socket/v3"
+	"github.com/zishang520/socket.io/clients/socket/v3"
 )
 
 func main() {
@@ -34,7 +34,6 @@ func main() {
 	}
 	defer (*client).Close()
 	var clientMutex sync.Mutex
-	log.Println("Socket.IO client connected.")
 
 	if len(os.Args) < 2 {
 		log.Fatalf("Usage: sudo %s <interface-name>", os.Args[0])
@@ -187,7 +186,7 @@ func processUdpPacket(
 	mtu int,
 	realLen int,
 	ipv4Len int,
-	client *socketio.Socket,
+	client *socket.Socket,
 	clientMutex *sync.Mutex,
 ) {
 	if l7Payload == nil {
@@ -223,7 +222,7 @@ func processUdpPacket(
 	}
 }
 
-func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte, client *socketio.Socket, clientMutex *sync.Mutex) ([]byte, error) {
+func processChunk(decoderCache *decoder.DecoderCache, chunkData []byte, client *socket.Socket, clientMutex *sync.Mutex) ([]byte, error) {
 	chunk, err := parser.ParseMonadChunkPacket(chunkData, client, clientMutex)
 	if err != nil {
 		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
@@ -261,7 +260,7 @@ func getMTU() int {
 	return mtu
 }
 
-func connectSocketIO() (*socketio.Socket, error) {
+func connectSocketIO() (*socket.Socket, error) {
 	godotenv.Load()
 	sioURL := os.Getenv("SOCKETIO_URL")
 
@@ -272,7 +271,8 @@ func connectSocketIO() (*socketio.Socket, error) {
 
 	log.Printf("Connecting to Socket.IO: %s", sioURL)
 
-	client, err := socketio.Connect(sioURL, nil)
+	client, err := socket.Connect(sioURL, nil)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to Socket.IO: %w", err)
 	}

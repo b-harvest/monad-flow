@@ -8,15 +8,17 @@ import (
 
 type MonadChunkPacket struct {
 	// 헤더 (Signature 이후)
-	Signature       [65]byte // Signature of sender
-	Version         uint16   // 2 bytes
-	Flags           byte     // 1 byte (broadcast, secondary_broadcast, unused)
-	MerkleTreeDepth byte     // 4 bits from Flags byte
-	Epoch           uint64   // 8 bytes (u64)
-	TimestampMs     uint64   // 8 bytes (u64)
-	AppMessageHash  [20]byte // 20 bytes (first 20 bytes of hash of AppMessage)
-	AppMessageLen   uint32   // 4 bytes (u32)
-	MerkleProof     [][]byte // 20 bytes * (MerkleTreeDepth - 1)
+	Signature          [65]byte // Signature of sender
+	Version            uint16   // 2 bytes
+	Flags              byte     // 1 byte (broadcast, secondary_broadcast, unused)
+	Broadcast          bool
+	SecondaryBroadcast bool
+	MerkleTreeDepth    byte     // 4 bits from Flags byte
+	Epoch              uint64   // 8 bytes (u64)
+	TimestampMs        uint64   // 8 bytes (u64)
+	AppMessageHash     [20]byte // 20 bytes (first 20 bytes of hash of AppMessage)
+	AppMessageLen      uint32   // 4 bytes (u32)
+	MerkleProof        [][]byte // 20 bytes * (MerkleTreeDepth - 1)
 
 	// 청크 특정 정보
 	FirstHopRecipient [20]byte // 20 bytes (first 20 bytes of hash of chunk's first hop recipient)
@@ -35,9 +37,6 @@ type Packet struct {
 }
 
 func (packet *MonadChunkPacket) PrintMonadPacketDetails() {
-	isBroadcast := (packet.Flags>>7)&0x01 == 1
-	isSecondaryBroadcast := (packet.Flags>>6)&0x01 == 1
-
 	fmt.Println("--- Monad Packet Chunk Details ---")
 
 	// 헤더 정보
@@ -45,8 +44,8 @@ func (packet *MonadChunkPacket) PrintMonadPacketDetails() {
 	fmt.Printf("  - Signature:           %x...\n", packet.Signature[:5])
 	fmt.Printf("  - Version:             %d\n", packet.Version)
 	fmt.Printf("  - Flags (Raw):         0x%02x\n", packet.Flags)
-	fmt.Printf("    - Broadcast:         %t\n", isBroadcast)
-	fmt.Printf("    - Secondary Broadcast: %t\n", isSecondaryBroadcast)
+	fmt.Printf("    - Broadcast:         %t\n", packet.Broadcast)
+	fmt.Printf("    - Secondary Broadcast: %t\n", packet.SecondaryBroadcast)
 	fmt.Printf("    - Merkle Tree Depth: %d\n", packet.MerkleTreeDepth)
 	fmt.Printf("  - Epoch #:             %d\n", packet.Epoch)
 	fmt.Printf("  - Timestamp (ms):      %d\n", packet.TimestampMs)
