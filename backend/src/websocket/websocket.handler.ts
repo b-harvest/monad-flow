@@ -56,7 +56,6 @@ export class WebSocketHandler
 
   @SubscribeMessage(WebsocketEvent.UDP_EVENT)
   async handleUDP(@MessageBody() data: any) {
-    this.logger.log(`UDP Event Received: ${JSON.stringify(data)}`);
     await this.appService.createFromUDP(data);
   }
 
