@@ -20,7 +20,7 @@ import {
 } from './app-message/monad-message.schema';
 
 @Schema()
-export class OutboundRouterMessageDocument extends Document {
+export class OutboundRouterMessage extends Document {
   /**
    * Version (SerializeVersion + CompressionVersion)
    */
@@ -65,5 +65,5 @@ export class OutboundRouterMessageDocument extends Document {
 }
 
 export const OutboundRouterMessageSchema = SchemaFactory.createForClass(
-  OutboundRouterMessageDocument,
+  OutboundRouterMessage,
 );
