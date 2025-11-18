@@ -13,11 +13,7 @@ export class MonadChunkPacket extends Document {
       dstIp: string;
       protocol: string;
     };
-    tcp?: {
-      srcPort: number;
-      dstPort: number;
-    };
-    udp?: {
+    port?: {
       srcPort: number;
       dstPort: number;
     };
