@@ -1,7 +1,7 @@
 package proposal
 
 import (
-	"monad-flow/model/message/protocol/common"
+	"monad-flow/model/message/outbound_router/monad/consensus/protocol/common"
 	"monad-flow/util"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -26,5 +26,3 @@ type ProposalMessage struct {
 type ConsensusBlockBody struct {
 	ExecutionBody ExecutionBody
 }
-
-func (*ProposalMessage) IsProtocolMessage() {}

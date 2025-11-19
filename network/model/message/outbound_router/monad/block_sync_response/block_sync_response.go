@@ -3,9 +3,9 @@ package block_sync_response
 import (
 	"bytes"
 	"fmt"
-	monad_common "monad-flow/model/message/monad/common"
-	protocol_common "monad-flow/model/message/protocol/common"
-	"monad-flow/model/message/protocol/proposal"
+	monad_common "monad-flow/model/message/outbound_router/monad/common"
+	protocol_common "monad-flow/model/message/outbound_router/monad/consensus/protocol/common"
+	"monad-flow/model/message/outbound_router/monad/consensus/protocol/proposal"
 	"monad-flow/util"
 
 	"github.com/ethereum/go-ethereum/rlp"

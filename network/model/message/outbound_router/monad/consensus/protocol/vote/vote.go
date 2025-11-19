@@ -1,8 +1,6 @@
 package vote
 
-import (
-	"monad-flow/util"
-)
+import "monad-flow/util"
 
 type Vote struct {
 	ID    util.BlockID
@@ -14,5 +12,3 @@ type VoteMessage struct {
 	Vote Vote
 	Sig  []byte
 }
-
-func (*VoteMessage) IsProtocolMessage() {}

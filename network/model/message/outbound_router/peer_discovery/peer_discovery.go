@@ -9,8 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type PeerDiscoveryMessage interface {
-	implementsPeerDiscoveryMessage()
+type PeerDiscoveryMessage struct {
+	Version uint16      `json:"version"`
+	Type    uint8       `json:"type"`
+	Payload interface{} `json:"payload,omitempty"`
 }
 
 type Ping struct {
@@ -39,73 +41,87 @@ type FullNodeRaptorcastRequest struct{}
 
 type FullNodeRaptorcastResponse struct{}
 
-func (p *Ping) implementsPeerDiscoveryMessage()                       {}
-func (p *Pong) implementsPeerDiscoveryMessage()                       {}
-func (r *PeerLookupRequest) implementsPeerDiscoveryMessage()          {}
-func (r *PeerLookupResponse) implementsPeerDiscoveryMessage()         {}
-func (r *FullNodeRaptorcastRequest) implementsPeerDiscoveryMessage()  {}
-func (r *FullNodeRaptorcastResponse) implementsPeerDiscoveryMessage() {}
-
-func DecodePeerDiscoveryMessage(b []byte) (PeerDiscoveryMessage, error) {
+func DecodePeerDiscoveryMessage(b []byte) (*PeerDiscoveryMessage, error) {
 	s := rlp.NewStream(bytes.NewReader(b), uint64(len(b)))
 
+	// Start list
 	_, err := s.List()
 	if err != nil {
-		return nil, fmt.Errorf("peer discovery message is not an RLP list: %w", err)
+		return nil, fmt.Errorf("PeerDiscovery RLP is not a list: %w", err)
 	}
 
-	// 1. 버전 디코딩
+	// Version
 	var version uint16
 	if err := s.Decode(&version); err != nil {
-		return nil, fmt.Errorf("failed to decode peer discovery version: %w", err)
+		return nil, fmt.Errorf("failed to decode PeerDiscovery version: %w", err)
 	}
 	if version != util.PeerDiscoveryVersion {
-		return nil, fmt.Errorf("unexpected peer discovery version: got %d, want %d", version, util.PeerDiscoveryVersion)
+		return nil, fmt.Errorf("unexpected PeerDiscovery version: got %d want %d",
+			version, util.PeerDiscoveryVersion)
 	}
 
-	// 2. 메시지 타입 디코딩
+	// Type
 	var msgType uint8
 	if err := s.Decode(&msgType); err != nil {
-		return nil, fmt.Errorf("failed to decode peer discovery message type: %w", err)
+		return nil, fmt.Errorf("failed to decode PeerDiscovery type: %w", err)
 	}
 
-	// 3. 타입에 따라 페이로드 디코딩
-	var msg PeerDiscoveryMessage
+	// Extract raw payload
+	payloadBytes, err := s.Raw()
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract PeerDiscovery payload: %w", err)
+	}
+
+	msg := &PeerDiscoveryMessage{
+		Version: version,
+		Type:    msgType,
+		Payload: nil,
+	}
+
+	// Decode according to type
 	switch msgType {
+
 	case util.PingMsgType:
 		var p Ping
-		if err := s.Decode(&p); err != nil {
-			return nil, fmt.Errorf("failed to decode Ping payload: %w", err)
+		if err := rlp.DecodeBytes(payloadBytes, &p); err != nil {
+			return nil, fmt.Errorf("failed to decode Ping: %w", err)
 		}
-		msg = &p
+		msg.Payload = &p
+
 	case util.PongMsgType:
 		var p Pong
-		if err := s.Decode(&p); err != nil {
-			return nil, fmt.Errorf("failed to decode Pong payload: %w", err)
+		if err := rlp.DecodeBytes(payloadBytes, &p); err != nil {
+			return nil, fmt.Errorf("failed to decode Pong: %w", err)
 		}
-		msg = &p
+		msg.Payload = &p
+
 	case util.PeerLookupRequestMsgType:
-		var r PeerLookupRequest
-		if err := s.Decode(&r); err != nil {
-			return nil, fmt.Errorf("failed to decode PeerLookupRequest payload: %w", err)
+		var req PeerLookupRequest
+		if err := rlp.DecodeBytes(payloadBytes, &req); err != nil {
+			return nil, fmt.Errorf("failed to decode PeerLookupRequest: %w", err)
 		}
-		msg = &r
+		msg.Payload = &req
+
 	case util.PeerLookupResponseMsgType:
-		var r PeerLookupResponse
-		if err := s.Decode(&r); err != nil {
-			return nil, fmt.Errorf("failed to decode PeerLookupResponse payload: %w", err)
+		var resp PeerLookupResponse
+		if err := rlp.DecodeBytes(payloadBytes, &resp); err != nil {
+			return nil, fmt.Errorf("failed to decode PeerLookupResponse: %w", err)
 		}
-		msg = &r
+		msg.Payload = &resp
+
 	case util.FullNodeRaptorcastReqMsgType:
-		msg = &FullNodeRaptorcastRequest{}
+		msg.Payload = &FullNodeRaptorcastRequest{}
+
 	case util.FullNodeRaptorcastRespMsgType:
-		msg = &FullNodeRaptorcastResponse{}
+		msg.Payload = &FullNodeRaptorcastResponse{}
+
 	default:
-		return nil, fmt.Errorf("unknown peer discovery message type: %d", msgType)
+		return nil, fmt.Errorf("unknown PeerDiscovery type: %d", msgType)
 	}
 
+	// End list
 	if err := s.ListEnd(); err != nil {
-		return nil, fmt.Errorf("extra data after peer discovery message (type %d): %w", msgType, err)
+		return nil, fmt.Errorf("extra data after PeerDiscovery message: %w", err)
 	}
 
 	return msg, nil

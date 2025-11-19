@@ -1,7 +1,7 @@
 package round_recovery
 
 import (
-	"monad-flow/model/message/protocol/common"
+	"monad-flow/model/message/outbound_router/monad/consensus/protocol/common"
 	"monad-flow/util"
 )
 
@@ -10,5 +10,3 @@ type RoundRecoveryMessage struct {
 	Epoch util.Epoch
 	TC    *common.TimeoutCertificate
 }
-
-func (*RoundRecoveryMessage) IsProtocolMessage() {}

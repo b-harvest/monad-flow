@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
-	"monad-flow/model/message/monad/common"
+	"monad-flow/model/message/outbound_router/monad/common"
 	"monad-flow/parser"
 	"sync"
 	"time"
@@ -110,7 +110,7 @@ func (s *MonadTcpStream) run() {
 				return
 			}
 		}
-		if err := parser.HandleDecodedMessage(signedMsg.Payload, s.client, s.clientMutex); err != nil {
+		if err := parser.HandleDecodedMessage(signedMsg.Payload, "none"); err != nil {
 			log.Printf("[L3-L5] Message handler error: %v", err)
 		}
 	}

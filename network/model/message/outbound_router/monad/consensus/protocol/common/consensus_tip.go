@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"monad-flow/model/message/protocol/no_endorsement"
+	"monad-flow/model/message/outbound_router/monad/consensus/protocol/no_endorsement"
 	"monad-flow/util"
 
 	"github.com/ethereum/go-ethereum/common"

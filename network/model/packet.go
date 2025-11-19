@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"monad-flow/model/message/outbound_router"
 
 	"github.com/google/gopacket/layers"
 )
@@ -51,6 +52,14 @@ type Packet struct {
 	TCPLayer      *layers.TCP
 	UDPLayer      *layers.UDP
 	Payload       []byte
+}
+
+type OutboundRouterCombined struct {
+	Version        outbound_router.NetworkMessageVersion `json:"version"`
+	MessageType    uint8                                 `json:"messageType"`
+	PeerDiscovery  interface{}                           `json:"peerDiscovery,omitempty"`
+	FullNodesGroup interface{}                           `json:"fullNodesGroup,omitempty"`
+	AppMessage     interface{}                           `json:"appMessage,omitempty"`
 }
 
 func (packet *MonadChunkPacket) PrintMonadPacketDetails() {

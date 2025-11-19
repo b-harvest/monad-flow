@@ -7,6 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"monad-flow/decoder"
+	"monad-flow/model"
+	"monad-flow/parser"
+	"monad-flow/util"
 	"os"
 	"os/signal"
 	"strconv"
@@ -14,15 +18,9 @@ import (
 	"syscall"
 	"time"
 
-	"monad-flow/decoder"
-	"monad-flow/model"
-	"monad-flow/parser"
-	"monad-flow/util"
-
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/joho/godotenv"
-
 	"github.com/zishang520/socket.io/clients/socket/v3"
 )
 
@@ -33,7 +31,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to Socket.IO: %v", err)
 	}
-	defer (*client).Close()
+
+	if client != nil {
+		defer (*client).Close()
+	}
+
 	var clientMutex sync.Mutex
 
 	if len(os.Args) < 2 {
@@ -235,7 +237,7 @@ func processChunk(decoderCache *decoder.DecoderCache, packet model.Packet, chunk
 	}
 
 	payload := map[string]interface{}{
-		"type": 0,
+		"type": util.MONAD_CHUNK_PACKET_EVENT,
 		"data": json.RawMessage(jsonData),
 	}
 
@@ -251,7 +253,8 @@ func processChunk(decoderCache *decoder.DecoderCache, packet model.Packet, chunk
 	}
 
 	if decodedMsg != nil {
-		if err := parser.HandleDecodedMessage(decodedMsg.Data, client, clientMutex); err != nil {
+		appMessageHash := fmt.Sprintf("0x%x", decodedMsg.AppMessageHash)
+		if err := parser.HandleDecodedMessage(decodedMsg.Data, appMessageHash); err != nil {
 			log.Printf("[RLP-ERROR] Failed to decode message: %v", err)
 		}
 	}
@@ -287,6 +290,12 @@ func connectSocketIO() (*socket.Socket, error) {
 	connectChan := make(chan struct{})
 	errChan := make(chan error, 1)
 
+	var connectOnce sync.Once
+	if sioURL == "no" {
+		close(connectChan)
+		return nil, nil
+	}
+
 	client, err := socket.Connect(sioURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate Socket.IO connection: %w", err)
@@ -294,7 +303,9 @@ func connectSocketIO() (*socket.Socket, error) {
 
 	client.On("connect", func(data ...any) {
 		log.Printf("Socket.IO connected successfully! ID: %s", client.Id())
-		close(connectChan)
+		connectOnce.Do(func() {
+			close(connectChan)
+		})
 	})
 
 	client.On("connect_error", func(err ...any) {

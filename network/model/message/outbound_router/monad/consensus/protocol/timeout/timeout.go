@@ -1,7 +1,7 @@
 package timeout
 
 import (
-	"monad-flow/model/message/protocol/common"
+	"monad-flow/model/message/outbound_router/monad/consensus/protocol/common"
 	"monad-flow/util"
 )
 
@@ -18,5 +18,3 @@ type TimeoutInfo struct {
 	HighQCRound  util.Round
 	HighTipRound util.Round
 }
-
-func (*TimeoutMessage) IsProtocolMessage() {}

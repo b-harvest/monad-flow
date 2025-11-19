@@ -1,7 +1,7 @@
 package advanced_round
 
 import (
-	"monad-flow/model/message/protocol/common"
+	"monad-flow/model/message/outbound_router/monad/consensus/protocol/common"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -18,5 +18,3 @@ func (a *AdvanceRoundMessage) DecodeRLP(s *rlp.Stream) error {
 	a.LastRoundCertificate = new(common.RoundCertificateWrapper)
 	return s.Decode(a.LastRoundCertificate)
 }
-
-func (*AdvanceRoundMessage) IsProtocolMessage() {}

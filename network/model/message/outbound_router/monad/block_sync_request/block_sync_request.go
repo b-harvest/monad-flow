@@ -2,7 +2,7 @@ package block_sync_request
 
 import (
 	"fmt"
-	"monad-flow/model/message/monad/common"
+	"monad-flow/model/message/outbound_router/monad/common"
 	"monad-flow/util"
 
 	"github.com/ethereum/go-ethereum/rlp"

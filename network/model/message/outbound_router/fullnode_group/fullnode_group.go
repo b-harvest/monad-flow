@@ -9,8 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type FullNodesGroupMessage interface {
-	implementsFullNodesGroupMessage()
+type FullNodesGroupMessage struct {
+	Version uint8       `json:"version"`
+	Type    uint8       `json:"type"`
+	Payload interface{} `json:"payload,omitempty"`
 }
 
 type PrepareGroup struct {
@@ -32,20 +34,16 @@ type ConfirmGroup struct {
 	NameRecords []*common.MonadNameRecord
 }
 
-func (m *ConfirmGroup) implementsFullNodesGroupMessage()         {}
-func (m *PrepareGroup) implementsFullNodesGroupMessage()         {}
-func (m *PrepareGroupResponse) implementsFullNodesGroupMessage() {}
-
-func DecodeFullNodesGroupMessage(b []byte) (FullNodesGroupMessage, error) {
+func DecodeFullNodesGroupMessage(b []byte) (*FullNodesGroupMessage, error) {
 	s := rlp.NewStream(bytes.NewReader(b), uint64(len(b)))
 
-	// 1. 래퍼 리스트 디코딩 [version, type, payload]
+	// 1. 리스트 시작 [version, type, payload]
 	_, err := s.List()
 	if err != nil {
 		return nil, fmt.Errorf("FullNodesGroup message is not an RLP list: %w", err)
 	}
 
-	// 2. 버전 디코딩 및 확인
+	// 2. 버전 디코딩
 	var version uint8
 	if err := s.Decode(&version); err != nil {
 		return nil, fmt.Errorf("failed to decode group message version: %w", err)
@@ -60,32 +58,47 @@ func DecodeFullNodesGroupMessage(b []byte) (FullNodesGroupMessage, error) {
 		return nil, fmt.Errorf("failed to decode group message type: %w", err)
 	}
 
-	// 4. 타입에 따라 페이로드 디코딩
-	var msg FullNodesGroupMessage
+	// 4. Payload 부분의 Raw 바이트 추출
+	payloadBytes, err := s.Raw()
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract group message payload: %w", err)
+	}
+
+	// 반환할 메시지 객체 생성
+	msg := &FullNodesGroupMessage{
+		Version: version,
+		Type:    msgType,
+		Payload: nil,
+	}
+
+	// 5. 타입에 따라 페이로드 디코딩
 	switch msgType {
 	case util.MsgTypePrepReq:
 		var p PrepareGroup
-		if err := s.Decode(&p); err != nil {
+		if err := rlp.DecodeBytes(payloadBytes, &p); err != nil {
 			return nil, fmt.Errorf("failed to decode PrepareGroup payload: %w", err)
 		}
-		msg = &p
+		msg.Payload = &p
+
 	case util.MsgTypePrepRes:
 		var r PrepareGroupResponse
-		if err := s.Decode(&r); err != nil {
+		if err := rlp.DecodeBytes(payloadBytes, &r); err != nil {
 			return nil, fmt.Errorf("failed to decode PrepareGroupResponse payload: %w", err)
 		}
-		msg = &r
+		msg.Payload = &r
+
 	case util.MsgTypeConfGrp:
 		var c ConfirmGroup
-		if err := s.Decode(&c); err != nil {
+		if err := rlp.DecodeBytes(payloadBytes, &c); err != nil {
 			return nil, fmt.Errorf("failed to decode ConfirmGroup payload: %w", err)
 		}
-		msg = &c
+		msg.Payload = &c
+
 	default:
 		return nil, fmt.Errorf("unknown FullNodesGroup message type: %d", msgType)
 	}
 
-	// 5. 래퍼 리스트 끝 확인
+	// 6. 리스트 끝 확인
 	if err := s.ListEnd(); err != nil {
 		return nil, fmt.Errorf("extra data after group message payload (type %d): %w", msgType, err)
 	}

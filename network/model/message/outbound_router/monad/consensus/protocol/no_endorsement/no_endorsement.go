@@ -1,8 +1,6 @@
 package no_endorsement
 
-import (
-	"monad-flow/util"
-)
+import "monad-flow/util"
 
 type NoEndorsement struct {
 	Epoch      util.Epoch
@@ -14,5 +12,3 @@ type NoEndorsementMessage struct {
 	Msg *NoEndorsement
 	Sig []byte
 }
-
-func (*NoEndorsementMessage) IsProtocolMessage() {}
