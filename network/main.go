@@ -242,7 +242,7 @@ func processChunk(decoderCache *decoder.DecoderCache, packet model.Packet, chunk
 	}
 
 	clientMutex.Lock()
-	client.Emit(util.UDP_EVENT, payload)
+	client.Emit(util.MONAD_CHUNK_EVENT, payload)
 	clientMutex.Unlock()
 
 	decodedMsg, err := decoderCache.HandleChunk(chunk)
@@ -280,10 +280,10 @@ func getMTU() int {
 
 func connectSocketIO() (*socket.Socket, error) {
 	godotenv.Load()
-	sioURL := os.Getenv("SOCKETIO_URL")
+	sioURL := os.Getenv("BACKEND_URL")
 
 	if sioURL == "" {
-		log.Println("SOCKETIO_URL not set in .env, using default http://127.0.0.1:3000")
+		log.Println("BACKEND_URL not set in .env, using default http://127.0.0.1:3000")
 		sioURL = "http://127.0.0.1:3000"
 	}
 

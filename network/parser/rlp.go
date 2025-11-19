@@ -2,8 +2,13 @@ package parser
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"time"
+
 	"monad-flow/model"
 	"monad-flow/model/message/outbound_router"
 	"monad-flow/model/message/outbound_router/fullnode_group"
@@ -12,10 +17,47 @@ import (
 	"monad-flow/util"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/joho/godotenv"
 )
 
+var BackendURL = getBackendURL() + "/api/outbound-message"
+
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
+}
+
+func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash string) error {
+	jsonData, err := json.Marshal(combined)
+	if err != nil {
+		return fmt.Errorf("Error marshaling combined data: %v", err)
+	}
+
+	payload := map[string]interface{}{
+		"type":           util.OUTBOUND_ROUTER_EVENT,
+		"appMessageHash": appMessageHash,
+		"data":           json.RawMessage(jsonData),
+	}
+
+	finalBody, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("Error marshaling final payload: %v", err)
+	}
+
+	resp, err := httpClient.Post(BackendURL, "application/json", bytes.NewBuffer(finalBody))
+	if err != nil {
+		return fmt.Errorf("Failed to send to backend: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Backend returned non-OK status: %s", resp.Status)
+	}
+
+	log.Printf("Sent payload successfully. Size: %.2f KB", float64(len(finalBody))/1024.0)
+	return nil
+}
+
 func HandleDecodedMessage(data []byte, appMessageHash string) error {
-	log.Println("new Decoded Message IN!!")
 	var orm outbound_router.OutboundRouterMessage
 
 	if err := rlp.Decode(bytes.NewReader(data), &orm); err != nil {
@@ -49,5 +91,20 @@ func HandleDecodedMessage(data []byte, appMessageHash string) error {
 	default:
 		return nil
 	}
-	return nil // websocketOutboundRouterSend(client, clientMutex, combined, appMessageHash)
+
+	return outboundRouterSend(combined, appMessageHash)
+}
+
+func getBackendURL() string {
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found, using default Backend URL")
+	}
+
+	url := os.Getenv("BACKEND_URL")
+
+	if url == "" {
+		url = "http://localhost:3000"
+	}
+
+	return url
 }

@@ -3,8 +3,7 @@ package util
 // --- 상수 테이블 (Constant Table) ---
 
 const (
-	UDP_EVENT = "UDP"
-	TCP_EVENT = "TCP"
+	MONAD_CHUNK_EVENT = "MONAD_CHUNK"
 )
 
 const (
