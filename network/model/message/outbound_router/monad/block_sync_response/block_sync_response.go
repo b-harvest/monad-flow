@@ -12,27 +12,27 @@ import (
 )
 
 type BlockSyncResponse struct {
-	IsHeadersResponse bool
-	HeadersData       *BlockSyncHeadersResponse
+	MessageName string
+	TypeID      uint8
 
-	IsPayloadResponse bool
-	PayloadData       *BlockSyncBodyResponse
+	HeadersData *BlockSyncHeadersResponse
+	PayloadData *BlockSyncBodyResponse
 }
 
 type BlockSyncHeadersResponse struct {
-	IsFound      bool
-	FoundRange   monad_common.BlockRange
-	FoundHeaders []*protocol_common.ConsensusBlockHeader
+	MessageName string
+	TypeID      uint8
 
-	IsNotAvailable bool
-	NotAvailRange  monad_common.BlockRange
+	FoundRange    monad_common.BlockRange
+	FoundHeaders  []*protocol_common.ConsensusBlockHeader
+	NotAvailRange monad_common.BlockRange
 }
 
 type BlockSyncBodyResponse struct {
-	IsFound   bool
-	FoundBody *proposal.ConsensusBlockBody
+	MessageName string
+	TypeID      uint8
 
-	IsNotAvailable  bool
+	FoundBody       *proposal.ConsensusBlockBody
 	NotAvailPayload util.ConsensusBlockBodyId
 }
 
@@ -56,9 +56,11 @@ func HandleBlockSyncResponse(payload rlp.RawValue) (*BlockSyncResponse, error) {
 
 	// 3. 타입 ID에 따라 파서를 호출합니다.
 	finalResponse := &BlockSyncResponse{}
+	finalResponse.MessageName = rlpResponse.MessageName
+	finalResponse.TypeID = rlpResponse.TypeID
+
 	switch rlpResponse.TypeID {
 	case util.BlockSyncHeaderType:
-		finalResponse.IsHeadersResponse = true
 		headersData, err := parseHeadersResponse(rlpResponse.Data)
 		if err != nil {
 			return nil, err
@@ -66,7 +68,6 @@ func HandleBlockSyncResponse(payload rlp.RawValue) (*BlockSyncResponse, error) {
 		finalResponse.HeadersData = headersData
 
 	case util.BlockSyncBodyType:
-		finalResponse.IsPayloadResponse = true
 		payloadData, err := parseBodyResponse(rlpResponse.Data)
 		if err != nil {
 			return nil, err
@@ -101,9 +102,11 @@ func parseHeadersResponse(rlpData rlp.RawValue) (*BlockSyncHeadersResponse, erro
 	}
 
 	resp := &BlockSyncHeadersResponse{}
+	resp.MessageName = msgName
+	resp.TypeID = typeID
+
 	switch typeID {
 	case util.Found:
-		resp.IsFound = true
 		if err := s.Decode(&resp.FoundRange); err != nil {
 			return nil, fmt.Errorf("L6 (HeadersResponse/Found): failed to decode Range: %w", err)
 		}
@@ -112,7 +115,6 @@ func parseHeadersResponse(rlpData rlp.RawValue) (*BlockSyncHeadersResponse, erro
 		}
 
 	case util.NotAvailable:
-		resp.IsNotAvailable = true
 		if err := s.Decode(&resp.NotAvailRange); err != nil {
 			return nil, fmt.Errorf("L6 (HeadersResponse/NotAvail): failed to decode Range: %w", err)
 		}
@@ -149,15 +151,16 @@ func parseBodyResponse(rlpData rlp.RawValue) (*BlockSyncBodyResponse, error) {
 	}
 
 	resp := &BlockSyncBodyResponse{}
+	resp.MessageName = msgName
+	resp.TypeID = typeID
+
 	switch typeID {
 	case util.Found:
-		resp.IsFound = true
 		if err := s.Decode(&resp.FoundBody); err != nil {
 			return nil, fmt.Errorf("L6 (BodyResponse/Found): failed to decode Body: %w", err)
 		}
 
 	case util.NotAvailable:
-		resp.IsNotAvailable = true
 		if err := s.Decode(&resp.NotAvailPayload); err != nil {
 			return nil, fmt.Errorf("L6 (BodyResponse/NotAvail): failed to decode PayloadID: %w", err)
 		}

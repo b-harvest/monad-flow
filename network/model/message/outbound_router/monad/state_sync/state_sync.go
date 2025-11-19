@@ -18,17 +18,13 @@ type stateSyncNetworkMessage struct {
 }
 
 type StateSyncNetworkMessage struct {
-	IsRequest bool
-	Request   StateSyncRequest
+	MessageName string
+	TypeID      uint8
 
-	IsResponse bool
+	Request    StateSyncRequest
 	Response   StateSyncResponse
-
-	IsBadVersion bool
-	BadVersion   StateSyncBadVersion
-
-	IsCompletion bool
-	Completion   SessionId
+	BadVersion StateSyncBadVersion
+	Completion SessionId
 }
 
 func HandleStateSyncMessage(payload rlp.RawValue) (*StateSyncNetworkMessage, error) {
@@ -42,25 +38,23 @@ func HandleStateSyncMessage(payload rlp.RawValue) (*StateSyncNetworkMessage, err
 	}
 
 	msg := &StateSyncNetworkMessage{}
+	msg.MessageName = rlpMsg.MessageName
+	msg.TypeID = rlpMsg.TypeID
 
 	switch rlpMsg.TypeID {
 	case util.TypeRequest:
-		msg.IsRequest = true
 		if err := rlp.DecodeBytes(rlpMsg.Data, &msg.Request); err != nil {
 			return nil, fmt.Errorf("L5 (StateSync): failed to decode Request (Type 1): %w", err)
 		}
 	case util.TypeResponse:
-		msg.IsResponse = true
 		if err := rlp.DecodeBytes(rlpMsg.Data, &msg.Response); err != nil {
 			return nil, fmt.Errorf("L5 (StateSync): failed to decode Response (Type 2): %w", err)
 		}
 	case util.TypeBadVersion:
-		msg.IsBadVersion = true
 		if err := rlp.DecodeBytes(rlpMsg.Data, &msg.BadVersion); err != nil {
 			return nil, fmt.Errorf("L5 (StateSync): failed to decode BadVersion (Type 3): %w", err)
 		}
 	case util.TypeCompletion:
-		msg.IsCompletion = true
 		if err := rlp.DecodeBytes(rlpMsg.Data, &msg.Completion); err != nil {
 			return nil, fmt.Errorf("L5 (StateSync): failed to decode Completion (Type 4): %w", err)
 		}

@@ -9,6 +9,9 @@ import (
 )
 
 type BlockSyncRequest struct {
+	MessageName string
+	TypeID      uint8
+
 	IsHeaders bool
 	Headers   common.BlockRange
 
