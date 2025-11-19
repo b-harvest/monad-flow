@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { OutboundRouterMessage } from './schema/network/outbound-router/outbound-router-message.schema';
+import { OutboundRouterMessage } from './schema/network/outbound-router-message.schema';
 import { UDPEvent } from './common/enum-definition';
 import { UDPEventType } from './common/type-definition';
 import { MonadChunkPacket } from './schema/network/monad-chunk-packet.schema';
@@ -17,19 +17,28 @@ export class AppService {
     private readonly outboundRouterModel: Model<OutboundRouterMessage>,
   ) {}
 
+  async getAll(): Promise<void> {}
+
   async createFromUDP(payload: {
     type: UDPEventType;
     data: any;
-  }): Promise<void> {
+  }): Promise<any> {
     const { type, data } = payload;
     if (type === UDPEvent.MONAD_CHUNK_PACKET) {
-      await this.handleMonadChunkPacket(data);
+      return this.handleMonadChunkPacket(data);
+    } else if (type === UDPEvent.OUTBOUND_ROUTER) {
+      return this.handleOutboundRouter(data);
     } else {
-      this.logger.warn(`Unknown UDPEvent type: ${type}`);
+      this.logger.log(
+        `Received UDP event:\n${JSON.stringify(payload, null, 2)}`,
+      );
     }
   }
 
-  private async handleMonadChunkPacket(data: any): Promise<void> {
+  private async handleMonadChunkPacket(data: any): Promise<MonadChunkPacket> {
+    this.logger.log(
+      `[DB] Saving MonadChunkPacket epoch=${data.Epoch}, chunk=${data.ChunkID}, appMessageHash=${data.AppMessageHash}`,
+    );
     const doc = new this.chunkModel({
       network: {
         ipv4: {
@@ -43,7 +52,7 @@ export class AppService {
         },
       },
 
-      signature: Buffer.from(data.Signature || []),
+      signature: '0x' + Buffer.from(data.Signature || []).toString('hex'),
       version: data.Version,
       flags: data.Flags,
       broadCast: data.Broadcast,
@@ -54,21 +63,34 @@ export class AppService {
       timestampMs: data.TimestampMs,
       timestamp: new Date(data.TimestampMs),
 
-      appMessageHash: Buffer.from(data.AppMessageHash || []),
+      appMessageHash:
+        '0x' + Buffer.from(data.AppMessageHash || []).toString('hex'),
       appMessageLen: data.AppMessageLen,
 
       merkleProof: data.MerkleProof,
-      firstHopRecipient: Buffer.from(data.FirstHopRecipient || []),
+      firstHopRecipient:
+        '0x' + Buffer.from(data.FirstHopRecipient || []).toString('hex'),
 
       merkleLeafIdx: data.MerkleLeafIdx,
       reserved: data.Reserved,
       chunkId: data.ChunkID,
     });
-    await doc.save();
-    this.logger.log(
-      `[DB] Saved MonadChunkPacket: epoch=${data.Epoch}, chunk=${data.ChunkID}, appMessageHash=${data.AppMessageHash}, timestampMs=${data.TimestampMs}ms`,
-    );
+    return doc.save();
   }
 
-  async getAll(): Promise<void> {}
+  private async handleOutboundRouter(
+    data: any,
+  ): Promise<OutboundRouterMessage> {
+    this.logger.log(
+      `[DB] Saving OutboundRouterMessage messageType=${data.messageType}`,
+    );
+    const doc = new this.outboundRouterModel({
+      version: data.version,
+      messageType: data.messageType,
+      data:
+        data.peerDiscovery || data.fullNodesGroup || data.appMessage || null,
+      appMessageHash: data.appMessageHash,
+    });
+    return doc.save();
+  }
 }

@@ -11,4 +11,5 @@ export enum WebsocketEvent {
 
 export enum UDPEvent {
   MONAD_CHUNK_PACKET,
+  OUTBOUND_ROUTER,
 }

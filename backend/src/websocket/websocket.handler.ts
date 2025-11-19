@@ -5,7 +5,6 @@ import {
   OnGatewayDisconnect,
   SubscribeMessage,
   MessageBody,
-  ConnectedSocket,
   OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
@@ -36,19 +35,11 @@ export class WebSocketHandler
   }
 
   handleDisconnect(client: Socket) {
-    const userId = client.handshake.headers['UserId'] as string;
-    this.logger.log(
-      `Client disconnected: ${client.id} (User: ${userId ?? 'unknown'})`,
-    );
+    this.logger.log(`Client disconnected: ${client.id}`);
   }
 
   sendToClient(event: WebsocketEventType, data: object) {
     this.server.emit(event, data);
-  }
-
-  @SubscribeMessage(WebsocketEvent.CLIENT_EVENT)
-  async handleClient(@ConnectedSocket() client: Socket) {
-    await client.join(WebsocketEvent.CLIENT_EVENT);
   }
 
   @SubscribeMessage(WebsocketEvent.TCP_EVENT)
@@ -56,7 +47,8 @@ export class WebSocketHandler
 
   @SubscribeMessage(WebsocketEvent.UDP_EVENT)
   async handleUDP(@MessageBody() data: any) {
-    await this.appService.createFromUDP(data);
+    const savedData = await this.appService.createFromUDP(data);
+    this.sendToClient(WebsocketEvent.CLIENT_EVENT, savedData);
   }
 
   @SubscribeMessage(WebsocketEvent.JOURNAL_CTL_EVENT)

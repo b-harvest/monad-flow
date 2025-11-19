@@ -3,7 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import {
   OutboundRouterMessage,
   OutboundRouterMessageSchema,
-} from '../schema/network/outbound-router/outbound-router-message.schema';
+} from '../schema/network/outbound-router-message.schema';
 import {
   MonadChunkPacket,
   MonadChunkPacketSchema,
