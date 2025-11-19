@@ -42,10 +42,7 @@ export class WebSocketHandler
     this.server.emit(event, data);
   }
 
-  @SubscribeMessage(WebsocketEvent.TCP_EVENT)
-  handleTCP(@MessageBody() data: any) {}
-
-  @SubscribeMessage(WebsocketEvent.UDP_EVENT)
+  @SubscribeMessage(WebsocketEvent.MONAD_CHUNK_EVENT)
   async handleUDP(@MessageBody() data: any) {
     const savedData = await this.appService.createFromUDP(data);
     this.sendToClient(WebsocketEvent.CLIENT_EVENT, savedData);

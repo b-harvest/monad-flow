@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OutboundRouterMessage } from './schema/network/outbound-router-message.schema';
-import { UDPEvent } from './common/enum-definition';
-import { UDPEventType } from './common/type-definition';
+import { NetworkEvent } from './common/enum-definition';
+import { NetworkEventType } from './common/type-definition';
 import { MonadChunkPacket } from './schema/network/monad-chunk-packet.schema';
 
 @Injectable()
@@ -20,13 +20,13 @@ export class AppService {
   async getAll(): Promise<void> {}
 
   async createFromUDP(payload: {
-    type: UDPEventType;
+    type: NetworkEventType;
     data: any;
   }): Promise<any> {
     const { type, data } = payload;
-    if (type === UDPEvent.MONAD_CHUNK_PACKET) {
+    if (type === NetworkEvent.MONAD_CHUNK) {
       return this.handleMonadChunkPacket(data);
-    } else if (type === UDPEvent.OUTBOUND_ROUTER) {
+    } else if (type === NetworkEvent.OUTBOUND_ROUTER) {
       return this.handleOutboundRouter(data);
     } else {
       this.logger.log(
@@ -81,8 +81,17 @@ export class AppService {
   private async handleOutboundRouter(
     data: any,
   ): Promise<OutboundRouterMessage> {
+    const jsonString = JSON.stringify(data);
+    const sizeBytes = Buffer.byteLength(jsonString);
+    const sizeKB = (sizeBytes / 1024).toFixed(2);
+
+    const sizeDisplay =
+      sizeBytes > 1024 * 1024
+        ? `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`
+        : `${sizeKB} KB`;
+
     this.logger.log(
-      `[DB] Saving OutboundRouterMessage messageType=${data.messageType}`,
+      `[DB] Saving OutboundRouterMessage messageType=${data.messageType}, size=${sizeDisplay}`,
     );
     const doc = new this.outboundRouterModel({
       version: data.version,

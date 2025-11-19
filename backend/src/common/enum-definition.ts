@@ -1,6 +1,5 @@
 export enum WebsocketEvent {
-  UDP_EVENT = 'UDP',
-  TCP_EVENT = 'TCP',
+  MONAD_CHUNK_EVENT = 'MONAD_CHUNK',
   JOURNAL_CTL_EVENT = 'JOURNAL_CTL',
   OFF_CPU_TIME_EVENT = 'OFF_CPU_TIME',
   PERF_SCHED_EVENT = 'PERF_SCHED',
@@ -9,7 +8,7 @@ export enum WebsocketEvent {
   CLIENT_EVENT = 'CLIENT',
 }
 
-export enum UDPEvent {
-  MONAD_CHUNK_PACKET,
+export enum NetworkEvent {
+  MONAD_CHUNK,
   OUTBOUND_ROUTER,
 }
