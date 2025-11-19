@@ -53,7 +53,7 @@ func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash st
 		return fmt.Errorf("Backend returned non-OK status: %s", resp.Status)
 	}
 
-	log.Printf("Sent payload successfully. Size: %.2f KB", float64(len(finalBody))/1024.0)
+	// log.Printf("Sent payload successfully. Size: %.2f KB", float64(len(finalBody))/1024.0)
 	return nil
 }
 

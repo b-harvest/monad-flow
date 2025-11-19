@@ -8,7 +8,8 @@ import (
 )
 
 type RoundCertificateWrapper struct {
-	Certificate RoundCertificate
+	TypeID      uint8            `json:"typeId"`
+	Certificate RoundCertificate `json:"certificate"`
 }
 
 type RoundCertificate interface {
@@ -36,6 +37,8 @@ func (r *RoundCertificateWrapper) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
+	r.TypeID = typeID
+
 	var cert RoundCertificate
 	switch typeID {
 	case util.QC:
@@ -51,7 +54,7 @@ func (r *RoundCertificateWrapper) DecodeRLP(s *rlp.Stream) error {
 	}
 
 	r.Certificate = cert
-	return nil
+	return s.ListEnd()
 }
 
 func (r *RoundCertificateQC) DecodeRLP(s *rlp.Stream) error {

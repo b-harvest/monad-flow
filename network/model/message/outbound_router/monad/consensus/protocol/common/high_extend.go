@@ -33,7 +33,8 @@ func (h *HighExtendQc) DecodeRLP(s *rlp.Stream) error {
 }
 
 type HighExtendWrapper struct {
-	Extend HighExtend
+	TypeID uint8      `json:"typeId"`
+	Extend HighExtend `json:"extend"`
 }
 
 func (w *HighExtendWrapper) DecodeRLP(s *rlp.Stream) error {
@@ -45,6 +46,8 @@ func (w *HighExtendWrapper) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return fmt.Errorf("failed to decode HighExtend type ID: %w", err)
 	}
+
+	w.TypeID = typeID
 
 	switch typeID {
 	case util.HighExtendTipType:

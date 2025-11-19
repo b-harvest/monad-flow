@@ -16,7 +16,8 @@ type NoTipCertificate struct {
 }
 
 type FreshProposalCertificateWrapper struct {
-	Certificate FreshProposalCertificate
+	TypeID      uint8                    `json:"typeId"`
+	Certificate FreshProposalCertificate `json:"certificate"`
 }
 
 type FreshProposalCertificate interface {
@@ -41,7 +42,8 @@ func (w *FreshProposalCertificateWrapper) DecodeRLP(s *rlp.Stream) error {
 		return fmt.Errorf("failed to get raw RLP for FreshProposalCertificate: %w", err)
 	}
 
-	if len(raw) == 1 && raw[0] == 0x80 {
+	if len(raw) == 0 || (len(raw) == 1 && raw[0] == 0x80) {
+		w.TypeID = 0
 		w.Certificate = nil
 		return nil
 	}
@@ -59,6 +61,8 @@ func (w *FreshProposalCertificateWrapper) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return fmt.Errorf("failed to decode FreshProposalCertificate type ID: %w", err)
 	}
+
+	w.TypeID = typeID
 
 	// 3. 타입 ID에 따라 실제 페이로드 디코딩
 	switch typeID {
