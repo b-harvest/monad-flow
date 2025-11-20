@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -147,19 +146,9 @@ func runWebSocketManager(ctx context.Context, wg *sync.WaitGroup, input <-chan D
 			if !ok {
 				return
 			}
-
 			if client.Connected() {
 				client.Emit(packet.Source, packet.Data)
-			} else {
-				fmt.Printf("Drop [%s] (Not Connected)\n", packet.Source)
-				jsonData, err := json.Marshal(packet.Data)
-				if err == nil {
-					fmt.Printf("   └─ Data: %s\n", string(jsonData))
-				} else {
-					fmt.Printf("   └─ Data (Raw): %+v\n", packet.Data)
-				}
 			}
-
 		case <-ctx.Done():
 			fmt.Println("Stopping WebSocket Manager...")
 			return

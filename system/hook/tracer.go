@@ -68,7 +68,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg
     uprobe:%s:%s %s {
         @start[tid] = nsecs;
         printf("E|%%d|%%d|%%s|%%s|%%s|0x%%lx|0x%%lx|0x%%lx|0x%%lx|0x%%lx|0x%%lx\n", 
-            pid, tid, strftime("%%H:%%M:%%S.%%f", nsecs), 
+            pid, tid, strftime("%%Y-%%m-%%d %%H:%%M:%%S.%%f", nsecs), 
             usym(reg("ip")), usym(*reg("sp")),
             arg0, arg1, arg2, arg3, arg4, arg5);
     }
@@ -134,7 +134,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg
 		} else if eventType == "X" && len(parts) >= 6 {
 			logEntry = TraceLog{
 				EventType: "EXIT",
-				Timestamp: time.Now().Format("15:04:05.000000"),
+				Timestamp: time.Now().Format("2006-01-02 15:04:05.000000"),
 				PID:       parts[1],
 				TID:       parts[2],
 				Data: ExitData{

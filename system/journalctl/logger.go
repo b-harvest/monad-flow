@@ -54,13 +54,16 @@ func tailService(ctx context.Context, wg *sync.WaitGroup, outChan chan<- LogEntr
 		return
 	}
 
-	if err = j.SeekTail(); err != nil {
-		log.Printf("[Journalctl] Failed to seek to tail for %s: %v\n", unitName, err)
+	startTime := time.Now()
+	oneSecondAgo := startTime.Add(-1 * time.Second)
+	seekTimeUsec := uint64(oneSecondAgo.UnixNano() / 1000)
+
+	if err = j.SeekRealtimeUsec(seekTimeUsec); err != nil {
+		log.Printf("[Journalctl] Failed to seek 1s ago for %s: %v\n", unitName, err)
+		j.SeekTail()
 	}
 
-	_, _ = j.Next()
-
-	fmt.Printf("[Journalctl] Started monitoring (Real-time only): %s\n", unitName)
+	fmt.Printf("[Journalctl] Monitoring %s (History: 1s)\n", unitName)
 
 	for {
 		select {
@@ -89,17 +92,19 @@ func tailService(ctx context.Context, wg *sync.WaitGroup, outChan chan<- LogEntr
 				ts := time.Unix(0, int64(entry.RealtimeTimestamp)*1000)
 				pid := entry.Fields["_PID"]
 
-				logData := LogEntry{
-					Service:   unitName,
-					Timestamp: ts.Format("15:04:05.000000"),
-					Message:   message,
-					PID:       pid,
-				}
+				if ts.After(startTime) || ts.Equal(startTime) {
+					logData := LogEntry{
+						Service:   unitName,
+						Timestamp: ts.Format("2006-01-02 15:04:05.000000"),
+						Message:   message,
+						PID:       pid,
+					}
 
-				select {
-				case outChan <- logData:
-				case <-ctx.Done():
-					return
+					select {
+					case outChan <- logData:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}
