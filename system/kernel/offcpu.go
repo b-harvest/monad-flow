@@ -30,7 +30,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- OffCPUData, c
 	defer wg.Done()
 
 	if cfg.TargetPID == "" {
-		log.Println("⚠️ [Kernel] Target PID is missing for Off-CPU tracing.")
+		log.Println("[Kernel] Target PID is missing for Off-CPU tracing.")
 		return
 	}
 	cmdPath := "/usr/sbin/offcputime-bpfcc"
@@ -39,24 +39,24 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- OffCPUData, c
 	}
 	if _, err := exec.LookPath(cmdPath); err != nil {
 		if _, err := os.Stat(cmdPath); os.IsNotExist(err) {
-			log.Printf("❌ [Kernel] 'offcputime' tool not found. Please install bcc-tools.\n")
+			log.Printf("[Kernel] 'offcputime' tool not found. Please install bcc-tools.\n")
 			return
 		}
 	}
 
-	fmt.Printf("🟢 [Kernel] Started Off-CPU Monitor for PID: %s (Cmd: %s)\n", cfg.TargetPID, cmdPath)
+	fmt.Printf("[Kernel] Started Off-CPU Monitor for PID: %s (Cmd: %s)\n", cfg.TargetPID, cmdPath)
 	reProcess := regexp.MustCompile(`-\s+(.+)\s+\((\d+)\)`)
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("🔴 [Kernel] Stopping Off-CPU Monitor.")
+			fmt.Println("[Kernel] Stopping Off-CPU Monitor.")
 			return
 		default:
 			cmd := exec.CommandContext(ctx, cmdPath, "-p", cfg.TargetPID, "1")
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				if ctx.Err() == nil {
-					log.Printf("⚠️ [Kernel] Execution error: %v\n", err)
+					log.Printf("[Kernel] Execution error: %v\n", err)
 				}
 				time.Sleep(1 * time.Second)
 				continue

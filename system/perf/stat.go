@@ -37,13 +37,13 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- PerfLog, cfg 
 	defer wg.Done()
 
 	if cfg.TargetPID == "" {
-		log.Println("⚠️ [Perf] Target PID is missing.")
+		log.Println("[Perf] Target PID is missing.")
 		return
 	}
 	pid := cfg.TargetPID
 
 	if _, err := exec.LookPath("perf"); err != nil {
-		log.Println("❌ [Perf] 'perf' command not found. Please install linux-tools.")
+		log.Println("[Perf] 'perf' command not found. Please install linux-tools.")
 		return
 	}
 
@@ -51,16 +51,16 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- PerfLog, cfg 
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		log.Printf("❌ [Perf] Pipe error: %v\n", err)
+		log.Printf("[Perf] Pipe error: %v\n", err)
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("❌ [Perf] Start error (Need sudo?): %v\n", err)
+		log.Printf("[Perf] Start error (Need sudo?): %v\n", err)
 		return
 	}
 
-	fmt.Printf("🟢 [Perf] Started Perf Monitor for PID: %s\n", pid)
+	fmt.Printf("[Perf] Started Perf Monitor for PID: %s\n", pid)
 
 	scanner := bufio.NewScanner(stderr)
 	var currentLog *PerfLog
@@ -105,7 +105,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- PerfLog, cfg 
 	}
 
 	cmd.Wait()
-	fmt.Println("🔴 [Perf] Service stopped.")
+	fmt.Println("[Perf] Service stopped.")
 }
 
 func parsePerfLine(line string) (PerfMetric, string, error) {

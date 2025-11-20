@@ -36,7 +36,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TurbostatMetr
 
 	path, err := exec.LookPath("turbostat")
 	if err != nil {
-		log.Println("❌ [Turbostat] Command not found. (kernel-tools installed?)")
+		log.Println("[Turbostat] Command not found. (kernel-tools installed?)")
 		return
 	}
 
@@ -44,16 +44,16 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TurbostatMetr
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("❌ [Turbostat] Stdout pipe error: %v\n", err)
+		log.Printf("[Turbostat] Stdout pipe error: %v\n", err)
 		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("❌ [Turbostat] Start error (Root required?): %v\n", err)
+		log.Printf("[Turbostat] Start error (Root required?): %v\n", err)
 		return
 	}
 
-	fmt.Println("🟢 [Turbostat] Started Power Monitor")
+	fmt.Println("[Turbostat] Started Power Monitor")
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -84,7 +84,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TurbostatMetr
 	}
 
 	cmd.Wait()
-	fmt.Println("🔴 [Turbostat] Service stopped.")
+	fmt.Println("[Turbostat] Service stopped.")
 }
 
 func isDataRow(firstField string) bool {

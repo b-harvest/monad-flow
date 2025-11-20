@@ -87,17 +87,17 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Printf("❌ [Hook] Pipe error: %v\n", err)
+		log.Printf("[Hook] Pipe error: %v\n", err)
 		return
 	}
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		log.Printf("❌ [Hook] Start error (Check sudo permissions): %v\n", err)
+		log.Printf("[Hook] Start error (Check sudo permissions): %v\n", err)
 		return
 	}
 
-	fmt.Printf("🟢 [Hook] Started tracing %s (Offset: %s, PID Filter: %s)\n", targetBin, targetOffset, cfg.TargetPID)
+	fmt.Printf("[Hook] Started tracing %s (Offset: %s, PID Filter: %s)\n", targetBin, targetOffset, cfg.TargetPID)
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -158,10 +158,10 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg
 
 	if err := cmd.Wait(); err != nil {
 		if ctx.Err() == nil {
-			log.Printf("⚠️ [Hook] Process exited with error: %v\n", err)
+			log.Printf("[Hook] Process exited with error: %v\n", err)
 		}
 	}
-	fmt.Println("🔴 [Hook] Service stopped.")
+	fmt.Println("[Hook] Service stopped.")
 }
 
 func cleanSymbol(sym string) string {

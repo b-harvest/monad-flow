@@ -44,14 +44,14 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- SchedLog, cfg
 	defer wg.Done()
 
 	if cfg.TargetPID == "" {
-		log.Println("⚠️ [Scheduler] Target PID is missing.")
+		log.Println("[Scheduler] Target PID is missing.")
 		return
 	}
 
 	mainPid := cfg.TargetPID
 	threads := make(map[string]*threadInfo)
 
-	fmt.Printf("🟢 [Scheduler] Started Scheduler Monitor for PID: %s\n", mainPid)
+	fmt.Printf("[Scheduler] Started Scheduler Monitor for PID: %s\n", mainPid)
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -59,7 +59,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- SchedLog, cfg
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("🔴 [Scheduler] Stopping Scheduler Monitor.")
+			fmt.Println("[Scheduler] Stopping Scheduler Monitor.")
 			return
 		case <-ticker.C:
 			taskPath := filepath.Join("/proc", mainPid, "task")

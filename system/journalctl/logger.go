@@ -25,7 +25,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- LogEntry, cfg
 	defer wg.Done()
 
 	if len(cfg.Services) == 0 {
-		log.Println("⚠️ [Journalctl] No services configured to monitor.")
+		log.Println("[Journalctl] No services configured to monitor.")
 		return
 	}
 
@@ -40,7 +40,7 @@ func tailService(ctx context.Context, wg *sync.WaitGroup, outChan chan<- LogEntr
 
 	j, err := sdjournal.NewJournal()
 	if err != nil {
-		log.Printf("❌ [Journalctl] Failed to open journal for %s: %v\n", unitName, err)
+		log.Printf("[Journalctl] Failed to open journal for %s: %v\n", unitName, err)
 		return
 	}
 	defer j.Close()
@@ -50,27 +50,27 @@ func tailService(ctx context.Context, wg *sync.WaitGroup, outChan chan<- LogEntr
 		Value: unitName,
 	}
 	if err = j.AddMatch(match.String()); err != nil {
-		log.Printf("❌ [Journalctl] Failed to add match for %s: %v\n", unitName, err)
+		log.Printf("[Journalctl] Failed to add match for %s: %v\n", unitName, err)
 		return
 	}
 
 	if err = j.SeekTail(); err != nil {
-		log.Printf("⚠️ [Journalctl] Failed to seek to tail for %s: %v\n", unitName, err)
+		log.Printf("[Journalctl] Failed to seek to tail for %s: %v\n", unitName, err)
 	}
 
 	_, _ = j.Next()
 
-	fmt.Printf("🟢 [Journalctl] Started monitoring (Real-time only): %s\n", unitName)
+	fmt.Printf("[Journalctl] Started monitoring (Real-time only): %s\n", unitName)
 
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Printf("🔴 [Journalctl] Stopping monitor for: %s\n", unitName)
+			fmt.Printf("[Journalctl] Stopping monitor for: %s\n", unitName)
 			return
 		default:
 			ret, err := j.Next()
 			if err != nil {
-				log.Printf("⚠️ [Journalctl] Read error on %s: %v\n", unitName, err)
+				log.Printf("[Journalctl] Read error on %s: %v\n", unitName, err)
 				time.Sleep(2 * time.Second)
 				continue
 			}
