@@ -10,20 +10,22 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
 type TurbostatMetric struct {
-	Core    string  `json:"core"`     // "0", "1" 또는 "-" (Summary)
-	CPU     string  `json:"cpu"`      // "0", "1" 또는 "-"
-	AvgMHz  float64 `json:"avg_mhz"`  // Avg_MHz
-	BusyPct float64 `json:"busy_pct"` // Busy%
-	BzyMHz  float64 `json:"bzy_mhz"`  // Bzy_MHz
-	TSCMHz  float64 `json:"tsc_mhz"`  // TSC_MHz
-	IPC     float64 `json:"ipc"`      // IPC
-	IRQ     int     `json:"irq"`      // IRQ
-	CorWatt float64 `json:"cor_watt"` // CorWatt
-	PkgWatt float64 `json:"pkg_watt"` // PkgWatt
+	Timestamp string  `json:"timestamp"` // 측정 시간
+	Core      string  `json:"core"`      // "0", "1" 또는 "-" (Summary)
+	CPU       string  `json:"cpu"`       // "0", "1" 또는 "-"
+	AvgMHz    float64 `json:"avg_mhz"`   // Avg_MHz
+	BusyPct   float64 `json:"busy_pct"`  // Busy%
+	BzyMHz    float64 `json:"bzy_mhz"`   // Bzy_MHz
+	TSCMHz    float64 `json:"tsc_mhz"`   // TSC_MHz
+	IPC       float64 `json:"ipc"`       // IPC
+	IRQ       int     `json:"irq"`       // IRQ
+	CorWatt   float64 `json:"cor_watt"`  // CorWatt
+	PkgWatt   float64 `json:"pkg_watt"`  // PkgWatt
 }
 
 func main() {
@@ -55,6 +57,8 @@ func main() {
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
+		now := time.Now().Format("2006-01-02 15:04:05.000")
+
 		line := scanner.Text()
 		fields := strings.Fields(line)
 
@@ -70,7 +74,7 @@ func main() {
 			continue
 		}
 
-		metric, err := parseTurbostatLine(fields)
+		metric, err := parseTurbostatLine(fields, now)
 		if err != nil {
 			log.Printf("파싱 에러 (%s): %v", line, err)
 			continue
@@ -97,14 +101,15 @@ func isDataRow(firstField string) bool {
 	return true
 }
 
-func parseTurbostatLine(fields []string) (TurbostatMetric, error) {
+func parseTurbostatLine(fields []string, timestamp string) (TurbostatMetric, error) {
 	if len(fields) < 10 {
 		return TurbostatMetric{}, fmt.Errorf("필드 개수 부족: %d", len(fields))
 	}
 
 	m := TurbostatMetric{
-		Core: fields[0],
-		CPU:  fields[1],
+		Timestamp: timestamp,
+		Core:      fields[0],
+		CPU:       fields[1],
 	}
 
 	var err error
