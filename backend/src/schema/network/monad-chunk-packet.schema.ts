@@ -3,9 +3,6 @@ import { Document } from 'mongoose';
 
 @Schema()
 export class MonadChunkPacket extends Document {
-  /**
-   * Raw metadata from capture
-   */
   @Prop({ type: Object })
   network?: {
     ipv4?: {
@@ -19,9 +16,6 @@ export class MonadChunkPacket extends Document {
     };
   };
 
-  /**
-   * Sender signature (65 bytes)
-   */
   @Prop({ required: true })
   signature: string; // hex string
 
@@ -40,33 +34,21 @@ export class MonadChunkPacket extends Document {
   @Prop({ required: true })
   merkleTreeDepth: number;
 
-  /**
-   * Epoch and timestamp (u64 → string)
-   */
   @Prop({ required: true })
   epoch: string;
 
   @Prop({ required: true })
   timestampMs: string;
 
-  /**
-   * AppMessage metadata
-   */
   @Prop({ required: true })
   appMessageHash: string; // hex (20 bytes)
 
   @Prop({ required: true })
   appMessageLen: number;
 
-  /**
-   * Merkle proof hashes
-   */
   @Prop({ type: [String], default: [] })
   merkleProof: string[];
 
-  /**
-   * Chunk-level info
-   */
   @Prop({ required: true })
   firstHopRecipient: string; // hex (20 bytes)
 
@@ -79,17 +61,11 @@ export class MonadChunkPacket extends Document {
   @Prop({ required: true, index: true })
   chunkId: number;
 
-  /**
-   * 이 패킷이 combine/조립되어 만들어진 higher-level message 추적용
-   */
   @Prop({ type: String, index: true, sparse: true })
   combinedMessageId?: string;
 
-  /**
-   * DB 저장 시간
-   */
   @Prop({ default: Date.now })
-  createdAt: Date;
+  timestamp: Date;
 }
 
 export const MonadChunkPacketSchema =

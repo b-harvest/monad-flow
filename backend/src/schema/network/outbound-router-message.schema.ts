@@ -16,7 +16,7 @@ export class OutboundRouterMessage extends Document {
   appMessageHash?: string;
 
   @Prop({ default: Date.now })
-  createdAt: Date;
+  timestamp: Date;
 }
 
 export const OutboundRouterMessageSchema = SchemaFactory.createForClass(

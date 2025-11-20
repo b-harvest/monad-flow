@@ -22,12 +22,13 @@ export class AppService {
   async createFromUDP(payload: {
     type: NetworkEventType;
     data: any;
+    timestamp: number;
   }): Promise<any> {
-    const { type, data } = payload;
+    const { type, data, timestamp } = payload;
     if (type === NetworkEvent.MONAD_CHUNK) {
-      return this.handleMonadChunkPacket(data);
+      return this.handleMonadChunkPacket(data, timestamp);
     } else if (type === NetworkEvent.OUTBOUND_ROUTER) {
-      return this.handleOutboundRouter(data);
+      return this.handleOutboundRouter(data, timestamp);
     } else {
       this.logger.log(
         `Received UDP event:\n${JSON.stringify(payload, null, 2)}`,
@@ -35,7 +36,10 @@ export class AppService {
     }
   }
 
-  private async handleMonadChunkPacket(data: any): Promise<MonadChunkPacket> {
+  private async handleMonadChunkPacket(
+    data: any,
+    timestamp: number,
+  ): Promise<MonadChunkPacket> {
     this.logger.log(
       `[DB] Saving MonadChunkPacket epoch=${data.Epoch}, chunk=${data.ChunkID}, appMessageHash=${data.AppMessageHash}`,
     );
@@ -61,7 +65,6 @@ export class AppService {
 
       epoch: data.Epoch?.toString(),
       timestampMs: data.TimestampMs,
-      timestamp: new Date(data.TimestampMs),
 
       appMessageHash:
         '0x' + Buffer.from(data.AppMessageHash || []).toString('hex'),
@@ -74,12 +77,15 @@ export class AppService {
       merkleLeafIdx: data.MerkleLeafIdx,
       reserved: data.Reserved,
       chunkId: data.ChunkID,
+
+      timestamp: new Date(timestamp / 1000),
     });
     return doc.save();
   }
 
   private async handleOutboundRouter(
     data: any,
+    timestamp: number,
   ): Promise<OutboundRouterMessage> {
     const jsonString = JSON.stringify(data);
     const sizeBytes = Buffer.byteLength(jsonString);
@@ -99,6 +105,7 @@ export class AppService {
       data:
         data.peerDiscovery || data.fullNodesGroup || data.appMessage || null,
       appMessageHash: data.appMessageHash,
+      timestamp: new Date(timestamp / 1000),
     });
     return doc.save();
   }
