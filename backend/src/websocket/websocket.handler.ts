@@ -44,22 +44,46 @@ export class WebSocketHandler
 
   @SubscribeMessage(WebsocketEvent.MONAD_CHUNK_EVENT)
   async handleUDP(@MessageBody() data: any) {
-    const savedData = await this.appService.createFromUDP(data);
-    this.sendToClient(WebsocketEvent.CLIENT_EVENT, savedData);
+    const doc = await this.appService.createFromUDP(data);
+    this.sendToClient(WebsocketEvent.CLIENT_EVENT, doc);
   }
 
-  @SubscribeMessage(WebsocketEvent.JOURNAL_CTL_EVENT)
-  handleJournalCtl(@MessageBody() data: any) {}
+  @SubscribeMessage(WebsocketEvent.BPF_TRACE)
+  async handleBPFTrace(@MessageBody() data: any) {
+    const doc = await this.appService.saveBpfTrace(data);
+    this.sendToClient(WebsocketEvent.BPF_TRACE, doc);
+  }
 
-  @SubscribeMessage(WebsocketEvent.OFF_CPU_TIME_EVENT)
-  handleOffCpuTime(@MessageBody() data: any) {}
+  @SubscribeMessage(WebsocketEvent.SYSTEM_LOG)
+  async handleSystemLog(@MessageBody() data: any) {
+    const doc = await this.appService.saveSystemdLog(data);
+    if (!doc) {
+      return;
+    }
+    this.sendToClient(WebsocketEvent.SYSTEM_LOG, doc);
+  }
 
-  @SubscribeMessage(WebsocketEvent.PERF_SCHED_EVENT)
-  handlePerfSched(@MessageBody() data: any) {}
+  @SubscribeMessage(WebsocketEvent.OFF_CPU)
+  async handleOffCpu(@MessageBody() data: any) {
+    const doc = await this.appService.saveOffCpuEvent(data);
+    this.sendToClient(WebsocketEvent.OFF_CPU, doc);
+  }
 
-  @SubscribeMessage(WebsocketEvent.PERF_STAT_EVENT)
-  handlePerfStat(@MessageBody() data: any) {}
+  @SubscribeMessage(WebsocketEvent.SCHEDULER)
+  async handleScheduler(@MessageBody() data: any) {
+    const doc = await this.appService.saveSchedulerEvent(data);
+    this.sendToClient(WebsocketEvent.SCHEDULER, doc);
+  }
 
-  @SubscribeMessage(WebsocketEvent.TURBO_STAT_EVENT)
-  handleTurboStat(@MessageBody() data: any) {}
+  @SubscribeMessage(WebsocketEvent.PERF_STAT)
+  async handlePerfStatus(@MessageBody() data: any) {
+    const doc = await this.appService.savePerfStatEvent(data);
+    this.sendToClient(WebsocketEvent.PERF_STAT, doc);
+  }
+
+  @SubscribeMessage(WebsocketEvent.TURBO_STAT)
+  async handleTurboStatus(@MessageBody() data: any) {
+    const doc = await this.appService.saveTurboStatEvent(data);
+    this.sendToClient(WebsocketEvent.TURBO_STAT, doc);
+  }
 }
