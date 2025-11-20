@@ -15,7 +15,7 @@ export class AppController {
 
   @Post('/outbound-message')
   async createOutboundMessage(
-    @Body() body: { type: NetworkEventType; data: any },
+    @Body() body: { type: NetworkEventType; data: any; timestamp: number },
     @Res() response: Response,
   ) {
     const result = await this.appService.createFromUDP(body);
