@@ -1,55 +1,132 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"fmt"
-	"io" // io.Copy를 위해 임포트
+	"io"
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
+	"unicode"
 )
 
+type TurbostatMetric struct {
+	Core    string  `json:"core"`     // "0", "1" 또는 "-" (Summary)
+	CPU     string  `json:"cpu"`      // "0", "1" 또는 "-"
+	AvgMHz  float64 `json:"avg_mhz"`  // Avg_MHz
+	BusyPct float64 `json:"busy_pct"` // Busy%
+	BzyMHz  float64 `json:"bzy_mhz"`  // Bzy_MHz
+	TSCMHz  float64 `json:"tsc_mhz"`  // TSC_MHz
+	IPC     float64 `json:"ipc"`      // IPC
+	IRQ     int     `json:"irq"`      // IRQ
+	CorWatt float64 `json:"cor_watt"` // CorWatt
+	PkgWatt float64 `json:"pkg_watt"` // PkgWatt
+}
+
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("사용법: sudo go run . <PID> (PID는 현재 코드에서 사용되지 않지만 인자로 받음)")
+	}
+
 	cmd := exec.Command("turbostat", "--interval", "0.5")
 
-	// 1. (수정) turbostat의 "데이터"가 나오는 stdout 파이프를 연결합니다.
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatalf("StdoutPipe 연결 실패: %v", err)
 	}
 
-	// 2. (추가) 헤더 정보나 오류 메시지를 보기 위해 stderr도 연결합니다.
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		log.Fatalf("StderrPipe 연결 실패: %v", err)
 	}
 
-	// 3. 명령어 시작
 	if err := cmd.Start(); err != nil {
-		log.Fatalf("turbostat 명령어 시작 실패: %v", err)
+		log.Fatalf("명령어 시작 실패: %v", err)
 	}
 
-	log.Println("... 'turbostat --interval 0.5'를 Go 프로그램으로 실행합니다 ...")
-	log.Println("... (참고: 이 Go 프로그램은 반드시 'sudo'로 실행해야 합니다) ...")
-	log.Println("... Ctrl+C로 Go 프로그램을 종료하면 turbostat도 함께 종료됩니다 ...")
-	fmt.Println()
+	log.Println("... turbostat 파싱 시작 ...")
 
-	// 4. (수정) bufio.Scanner 대신 goroutine과 io.Copy 사용
-	//    stdout 데이터를 Go 프로그램의 stdout으로 "있는 그대로" 복사합니다.
-	//    이 방식은 '\n'이든 '\r'이든 상관없이 동작합니다.
-	go func() {
-		io.Copy(os.Stdout, stdout)
-	}()
-
-	// 5. (추가) stderr 데이터도 Go 프로그램의 stderr로 "있는 그대로" 복사합니다.
 	go func() {
 		io.Copy(os.Stderr, stderr)
 	}()
 
-	// 6. 'turbostat' 프로세스가 종료될 때까지 대기
-	if err := cmd.Wait(); err != nil {
-		// Ctrl+C로 종료 시 "signal: interrupt" 오류가 발생할 수 있으며, 이는 정상입니다.
-		log.Printf("turbostat 명령어가 종료되었습니다 (오류: %v)", err)
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Fields(line)
+
+		if len(fields) < 10 {
+			continue
+		}
+
+		if fields[0] == "Core" {
+			continue
+		}
+
+		if !isDataRow(fields[0]) {
+			continue
+		}
+
+		metric, err := parseTurbostatLine(fields)
+		if err != nil {
+			log.Printf("파싱 에러 (%s): %v", line, err)
+			continue
+		}
+
+		jsonData, _ := json.Marshal(metric)
+		fmt.Printf("[Parsed] %s\n", string(jsonData))
 	}
 
-	log.Println("... 모니터링 종료 ...")
+	if err := cmd.Wait(); err != nil {
+		log.Printf("turbostat 종료: %v", err)
+	}
+}
+
+func isDataRow(firstField string) bool {
+	if firstField == "-" {
+		return true
+	}
+	for _, char := range firstField {
+		if !unicode.IsDigit(char) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseTurbostatLine(fields []string) (TurbostatMetric, error) {
+	if len(fields) < 10 {
+		return TurbostatMetric{}, fmt.Errorf("필드 개수 부족: %d", len(fields))
+	}
+
+	m := TurbostatMetric{
+		Core: fields[0],
+		CPU:  fields[1],
+	}
+
+	var err error
+
+	parseFloat := func(s string) float64 {
+		v, _ := strconv.ParseFloat(s, 64)
+		return v
+	}
+
+	parseInt := func(s string) int {
+		v, _ := strconv.Atoi(s)
+		return v
+	}
+
+	m.AvgMHz = parseFloat(fields[2])
+	m.BusyPct = parseFloat(fields[3])
+	m.BzyMHz = parseFloat(fields[4])
+	m.TSCMHz = parseFloat(fields[5])
+	m.IPC = parseFloat(fields[6])
+	m.IRQ = parseInt(fields[7])
+	m.CorWatt = parseFloat(fields[8])
+	m.PkgWatt = parseFloat(fields[9])
+
+	return m, err
 }

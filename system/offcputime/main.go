@@ -1,54 +1,132 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
-	// Sleep을 사용하진 않지만, 혹시 나중에 짧게 쓸 수 있으니 놔둡니다.
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"text/tabwriter"
+	"time"
 )
 
-func runCommand(name string, args ...string) {
-	// ... (이전과 동일) ...
-	fmt.Printf("\n--- [실행]: %s %v ---\n", name, args)
+type OffCPUData struct {
+	ProcessName string
+	PID         string
+	DurationUs  int
+	Stack       []string
+}
 
-	cmd := exec.Command(name, args...)
+func printFormattedData(data []OffCPUData) {
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].DurationUs > data[j].DurationUs
+	})
 
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+
+	fmt.Fprintln(w, "TID\tPROCESS\tLATENCY(ms)\tSTACK TRACE (Call Chain)")
+	fmt.Fprintln(w, "---\t-------\t-----------\t------------------------")
+
+	for _, d := range data {
+		ms := float64(d.DurationUs) / 1000.0
+
+		stackStr := strings.Join(d.Stack, " -> ")
+		fmt.Fprintf(w, "%s\t%s\t%.3f ms\t[ %s ]\n", d.PID, d.ProcessName, ms, stackStr)
+	}
+
+	w.Flush()
+	fmt.Printf("--- 총 %d건의 대기 이벤트 감지됨 ---\n", len(data))
+}
+
+func parseOutput(output string) []OffCPUData {
+	var results []OffCPUData
+	scanner := bufio.NewScanner(strings.NewReader(output))
+
+	reProcess := regexp.MustCompile(`-\s+(.+)\s+\((\d+)\)`)
+
+	var currentStack []string
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "Tracing") {
+			continue
+		}
+		if strings.HasPrefix(line, "-") && strings.Contains(line, "(") {
+			matches := reProcess.FindStringSubmatch(line)
+			if len(matches) == 3 {
+				procName := strings.TrimSpace(matches[1])
+				pid := matches[2]
+
+				if scanner.Scan() {
+					timeLine := strings.TrimSpace(scanner.Text())
+					duration, err := strconv.Atoi(timeLine)
+					if err == nil {
+						results = append(results, OffCPUData{
+							ProcessName: procName,
+							PID:         pid,
+							DurationUs:  duration,
+							Stack:       append([]string{}, currentStack...),
+						})
+					}
+				}
+				currentStack = []string{}
+			}
+		} else {
+			if _, err := strconv.Atoi(line); err != nil {
+				currentStack = append(currentStack, line)
+			}
+		}
+	}
+	return results
+}
+
+func runCommand(cmdPath string, pid string, duration string) {
+	fmt.Println("\n" + strings.Repeat("=", 80))
+	fmt.Printf(">>> [측정 중...] PID: %s, Duration: %s초 (Time: %s) <<<\n",
+		pid, duration, time.Now().Format("15:04:05"))
+	fmt.Println(strings.Repeat("=", 80))
+
+	cmd := exec.Command(cmdPath, "-p", pid, duration)
 	output, err := cmd.CombinedOutput()
 
-	if len(args) > 1 && (args[1] == "latency" || args[1] == "timehist" || name == "offcputime") {
-		fmt.Println(string(output))
+	if err != nil {
+		fmt.Printf("--- [에러]: 실행 실패: %v\n", err)
+		return
 	}
 
-	if err != nil {
-		fmt.Printf("--- [에러]: %s 실행 실패: %v ---\n", name, err)
-	}
+	data := parseOutput(string(output))
+	printFormattedData(data)
 }
 
 func main() {
-	// ... (권한 및 PID 인자 확인 부분은 이전과 동일) ...
 	if os.Geteuid() != 0 {
-		fmt.Println("이 프로그램은 sudo 또는 root 권한으로 실행해야 합니다.")
+		fmt.Println("ERROR: 이 프로그램은 sudo 권한으로 실행해야 합니다.")
 		os.Exit(1)
 	}
 
 	if len(os.Args) < 2 {
-		fmt.Println("모니터링할 PID를 인자로 전달해야 합니다.")
-		fmt.Println("예: sudo go run . 12345")
+		fmt.Println("사용법: sudo go run . <PID>")
 		os.Exit(1)
 	}
 	pid := os.Args[1]
-	fmt.Printf("--- [PID %s] 모니터링 시작 ---\n", pid)
 
-	// 3. 무한 루프 시작
+	cmdPath := "/usr/sbin/offcputime-bpfcc"
+
+	if _, err := os.Stat(cmdPath); os.IsNotExist(err) {
+		cmdPath = "offcputime"
+	}
+
+	fmt.Printf("--- [PID %s] 모니터링 시작 (Ctrl+C로 종료) ---\n", pid)
+
 	for {
-		fmt.Println("--- [새 사이클 시작] ---")
-
-		// 4. [명령어 1] offcputime 실행 (1초 소요)
-		runCommand("offcputime", "-p", pid, "1")
-
-		fmt.Printf("\n--- [사이클 완료] 즉시 다음 사이클을 시작합니다 ... (Ctrl+C로 종료) ---\n\n")
-
-		// 8. 2초 대기 라인 삭제!
-		// time.Sleep(2 * time.Second)
+		runCommand(cmdPath, pid, "1")
+		time.Sleep(100 * time.Millisecond)
 	}
 }

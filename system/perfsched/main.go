@@ -3,63 +3,165 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	// Sleep을 사용하진 않지만, 혹시 나중에 짧게 쓸 수 있으니 놔둡니다.
+	"path/filepath"
+	"strconv"
+	"strings"
+	"text/tabwriter"
+	"time"
 )
 
-func runCommand(name string, args ...string) {
-	// ... (이전과 동일) ...
-	fmt.Printf("\n--- [실행]: %s %v ---\n", name, args)
+// SchedStat: /proc/[pid]/schedstat 정보를 담는 구조체
+type SchedStat struct {
+	RunTime   uint64
+	WaitTime  uint64
+	RunCount  uint64
+	Timestamp time.Time
+}
 
-	cmd := exec.Command(name, args...)
+// 스레드 정보를 담는 구조체
+type ThreadInfo struct {
+	TID      string
+	Comm     string
+	Current  SchedStat
+	Previous SchedStat
+}
 
-	output, err := cmd.CombinedOutput()
-
-	if len(args) > 1 && (args[1] == "latency" || args[1] == "timehist" || name == "offcputime") {
-		fmt.Println(string(output))
-	}
-
+// /proc/[tid]/schedstat 파일을 읽어서 파싱
+func readSchedStat(path string) (SchedStat, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Printf("--- [에러]: %s 실행 실패: %v ---\n", name, err)
+		return SchedStat{}, err
 	}
+
+	fields := strings.Fields(string(data))
+	if len(fields) < 3 {
+		return SchedStat{}, fmt.Errorf("invalid format")
+	}
+
+	runTime, _ := strconv.ParseUint(fields[0], 10, 64)
+	waitTime, _ := strconv.ParseUint(fields[1], 10, 64)
+	runCount, _ := strconv.ParseUint(fields[2], 10, 64)
+
+	return SchedStat{
+		RunTime:   runTime,
+		WaitTime:  waitTime,
+		RunCount:  runCount,
+		Timestamp: time.Now(),
+	}, nil
+}
+
+// /proc/[tid]/comm 파일을 읽어서 이름 파악
+func readComm(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "unknown"
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// 수집된 데이터를 분석하여 출력
+func printAnalysis(threads map[string]*ThreadInfo) {
+	type Result struct {
+		TID         string
+		Name        string
+		WaitDeltaMs float64
+		RunDeltaMs  float64
+		CtxSwitches uint64
+	}
+
+	var results []Result
+
+	for _, t := range threads {
+		if t.Previous.RunCount == 0 && t.Previous.RunTime == 0 {
+			continue
+		}
+		waitDelta := float64(t.Current.WaitTime-t.Previous.WaitTime) / 1_000_000.0
+		runDelta := float64(t.Current.RunTime-t.Previous.RunTime) / 1_000_000.0
+		switchDelta := t.Current.RunCount - t.Previous.RunCount
+
+		if switchDelta == 0 && waitDelta == 0 {
+			continue
+		}
+
+		results = append(results, Result{
+			TID:         t.TID,
+			Name:        t.Comm,
+			WaitDeltaMs: waitDelta,
+			RunDeltaMs:  runDelta,
+			CtxSwitches: switchDelta,
+		})
+	}
+
+	for i := 0; i < len(results); i++ {
+		for j := i + 1; j < len(results); j++ {
+			if results[i].WaitDeltaMs < results[j].WaitDeltaMs {
+				results[i], results[j] = results[j], results[i]
+			}
+		}
+	}
+
+	fmt.Printf("\n>>> [스케줄러 지연(Latency) 실시간 분석] Time: %s <<<\n", time.Now().Format("15:04:05"))
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "TID\tTHREAD NAME\tWAIT(Latency)\tCPU RUN\tSWITCHES")
+	fmt.Fprintln(w, "---\t-----------\t-------------\t-------\t--------")
+
+	count := 0
+	for _, r := range results {
+		fmt.Fprintf(w, "%s\t%s\t%.2f ms\t%.2f ms\t%d\n",
+			r.TID, r.Name, r.WaitDeltaMs, r.RunDeltaMs, r.CtxSwitches)
+
+		count++
+		if count >= 20 {
+			break
+		}
+	}
+	w.Flush()
+	fmt.Printf("--- 총 %d개 스레드 모니터링 중 ---\n", len(results))
 }
 
 func main() {
-	// ... (권한 및 PID 인자 확인 부분은 이전과 동일) ...
-	if os.Geteuid() != 0 {
-		fmt.Println("이 프로그램은 sudo 또는 root 권한으로 실행해야 합니다.")
-		os.Exit(1)
-	}
-
 	if len(os.Args) < 2 {
-		fmt.Println("모니터링할 PID를 인자로 전달해야 합니다.")
-		fmt.Println("예: sudo go run . 12345")
+		fmt.Println("사용법: sudo go run . <PID>")
 		os.Exit(1)
 	}
-	pid := os.Args[1]
-	fmt.Printf("--- [PID %s] 모니터링 시작 ---\n", pid)
+	mainPid := os.Args[1]
 
-	const perfDataFile = "./perf.data"
+	threads := make(map[string]*ThreadInfo)
 
-	// 3. 무한 루프 시작
+	fmt.Printf("--- [PID %s] 모니터링 시작 (Ctrl+C로 종료) ---\n", mainPid)
+
 	for {
-		fmt.Println("--- [새 사이클 시작] ---")
+		taskPath := filepath.Join("/proc", mainPid, "task")
+		entries, err := os.ReadDir(taskPath)
+		if err != nil {
+			fmt.Printf("Error reading tasks: %v\n", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
 
-		// 4. [명령어 1] offcputime 실행 (1초 소요)
-		runCommand("offcputime", "-p", pid, "1")
+		for _, entry := range entries {
+			tid := entry.Name()
+			statPath := filepath.Join(taskPath, tid, "schedstat")
+			commPath := filepath.Join(taskPath, tid, "comm")
 
-		// 5. [명령어 2] perf sched record 실행 (0.1초 소요)
-		runCommand("perf", "sched", "record", "-p", pid, "-o", perfDataFile, "sleep", "0.1")
+			currentStat, err := readSchedStat(statPath)
+			if err != nil {
+				continue
+			}
 
-		// 6. [명령어 3] perf sched latency 실행
-		runCommand("perf", "sched", "latency", "-i", perfDataFile)
+			if _, exists := threads[tid]; !exists {
+				threads[tid] = &ThreadInfo{
+					TID:  tid,
+					Comm: readComm(commPath),
+				}
+			}
 
-		// 7. [명령어 4] perf sched timehist 실행
-		runCommand("perf", "sched", "timehist", "-i", perfDataFile)
-
-		fmt.Printf("\n--- [사이클 완료] 즉시 다음 사이클을 시작합니다 ... (Ctrl+C로 종료) ---\n\n")
-
-		// 8. 2초 대기 라인 삭제!
-		// time.Sleep(2 * time.Second)
+			t := threads[tid]
+			t.Previous = t.Current
+			t.Current = currentStat
+		}
+		printAnalysis(threads)
+		time.Sleep(1 * time.Second)
 	}
 }
