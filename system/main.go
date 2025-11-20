@@ -18,6 +18,7 @@ import (
 	"system/turbostat"
 
 	"github.com/joho/godotenv"
+	"github.com/zishang520/socket.io/clients/socket/v3"
 )
 
 type DataPacket struct {
@@ -35,10 +36,15 @@ func main() {
 	binaryPath := os.Getenv("TARGET_BINARY")
 	offset := os.Getenv("TARGET_OFFSET")
 
+	socketURL := os.Getenv("BACKEND_URL")
+	if socketURL == "" {
+		socketURL = "http://127.0.0.1:3000"
+	}
+
 	fmt.Println("==========================================")
-	fmt.Println("🚀 All-in-One System Monitor Starting...")
-	fmt.Printf("🎯 Target PID: %s\n", pid)
-	fmt.Printf("📦 Services: %v\n", services)
+	fmt.Println("All-in-One System Monitor Starting...")
+	fmt.Printf("Target PID: %s\n", pid)
+	fmt.Printf("Socket Server: %s\n", socketURL)
 	fmt.Println("==========================================")
 
 	mainDataChan := make(chan DataPacket, 1000)
@@ -46,63 +52,49 @@ func main() {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go runWebSocketManager(ctx, &wg, mainDataChan)
+	go runWebSocketManager(ctx, &wg, mainDataChan, socketURL)
 
 	hookChan := make(chan hook.TraceLog, 100)
 	wg.Add(1)
-	go hook.Start(ctx, &wg, hookChan, hook.Config{
-		TargetPID:  pid,
-		BinaryPath: binaryPath,
-		Offset:     offset,
-	})
+	go hook.Start(ctx, &wg, hookChan, hook.Config{TargetPID: pid, BinaryPath: binaryPath, Offset: offset})
 	go bridge(ctx, hookChan, mainDataChan, "BPF_TRACE")
 
 	journalChan := make(chan journalctl.LogEntry, 100)
 	wg.Add(1)
-	go journalctl.Start(ctx, &wg, journalChan, journalctl.Config{
-		Services: services,
-	})
+	go journalctl.Start(ctx, &wg, journalChan, journalctl.Config{Services: services})
 	go bridge(ctx, journalChan, mainDataChan, "SYSTEM_LOG")
 
 	offCpuChan := make(chan kernel.OffCPUData, 100)
 	wg.Add(1)
-	go kernel.Start(ctx, &wg, offCpuChan, kernel.Config{
-		TargetPID: pid,
-	})
+	go kernel.Start(ctx, &wg, offCpuChan, kernel.Config{TargetPID: pid})
 	go bridge(ctx, offCpuChan, mainDataChan, "OFF_CPU")
 
 	schedChan := make(chan scheduler.SchedLog, 100)
 	wg.Add(1)
-	go scheduler.Start(ctx, &wg, schedChan, scheduler.Config{
-		TargetPID: pid,
-	})
+	go scheduler.Start(ctx, &wg, schedChan, scheduler.Config{TargetPID: pid})
 	go bridge(ctx, schedChan, mainDataChan, "SCHEDULER")
 
 	perfChan := make(chan perf.PerfLog, 50)
 	wg.Add(1)
-	go perf.Start(ctx, &wg, perfChan, perf.Config{
-		TargetPID: pid,
-	})
+	go perf.Start(ctx, &wg, perfChan, perf.Config{TargetPID: pid})
 	go bridge(ctx, perfChan, mainDataChan, "PERF_STAT")
 
 	turboChan := make(chan turbostat.TurbostatMetric, 50)
 	wg.Add(1)
-	go turbostat.Start(ctx, &wg, turboChan, turbostat.Config{
-		TargetPID: pid,
-	})
+	go turbostat.Start(ctx, &wg, turboChan, turbostat.Config{TargetPID: pid})
 	go bridge(ctx, turboChan, mainDataChan, "TURBO_STAT")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	<-quit
-	fmt.Println("\n🛑 Shutting down system...")
+	fmt.Println("\nShutting down system...")
 
 	cancel()
 	wg.Wait()
 	close(mainDataChan)
 
-	fmt.Println("✅ Monitor system exited cleanly.")
+	fmt.Println("Monitor system exited cleanly.")
 }
 
 func bridge[T any](ctx context.Context, input <-chan T, output chan<- DataPacket, sourceName string) {
@@ -122,15 +114,33 @@ func bridge[T any](ctx context.Context, input <-chan T, output chan<- DataPacket
 	}
 }
 
-// runWebSocketManager: 최종적으로 데이터를 받아 WebSocket으로 전송하는 역할 (현재는 화면 출력)
-func runWebSocketManager(ctx context.Context, wg *sync.WaitGroup, input <-chan DataPacket) {
+func runWebSocketManager(ctx context.Context, wg *sync.WaitGroup, input <-chan DataPacket, url string) {
 	defer wg.Done()
-	fmt.Println("📡 WebSocket Manager Started (Waiting for data...)")
 
-	// JSON 인코더 (화면 출력용, 나중에 ws.WriteJSON으로 대체)
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetEscapeHTML(false)
+	client, err := socket.Connect(url, nil)
+	if err != nil {
+		log.Printf("Initial Socket Connection Failed: %v (Will try to reconnect...)", err)
+	}
 
+	defer func() {
+		if client != nil {
+			client.Close()
+		}
+	}()
+
+	client.On("connect", func(data ...any) {
+		log.Printf("[WebSocket] Connected to Server! (ID: %v)", client.Id())
+	})
+
+	client.On("disconnect", func(data ...any) {
+		log.Println("[WebSocket] Disconnected from Server.")
+	})
+
+	client.On("connect_error", func(err ...any) {
+		log.Printf("[WebSocket] Connection Error: %v", err[0])
+	})
+
+	fmt.Println("WebSocket Sender Started. Forwarding data...")
 	for {
 		select {
 		case packet, ok := <-input:
@@ -138,18 +148,20 @@ func runWebSocketManager(ctx context.Context, wg *sync.WaitGroup, input <-chan D
 				return
 			}
 
-			// [TODO] 여기에 WebSocket 전송 로직이 들어갑니다.
-			// 예: err := wsConn.WriteJSON(packet)
-
-			// 현재는 시뮬레이션을 위해 콘솔에 출력
-			// 데이터가 너무 빠르면 보기가 힘드니 간단하게 출력 포맷팅
-			// fmt.Printf("[WS SEND] Source: %-10s | Data: %+v\n", packet.Source, packet.Data)
-
-			// 또는 전체 JSON 덤프 (디버깅용)
-			_ = encoder.Encode(packet)
+			if client.Connected() {
+				client.Emit(packet.Source, packet.Data)
+			} else {
+				fmt.Printf("Drop [%s] (Not Connected)\n", packet.Source)
+				jsonData, err := json.Marshal(packet.Data)
+				if err == nil {
+					fmt.Printf("   └─ Data: %s\n", string(jsonData))
+				} else {
+					fmt.Printf("   └─ Data (Raw): %+v\n", packet.Data)
+				}
+			}
 
 		case <-ctx.Done():
-			fmt.Println("📡 WebSocket Manager Stopped.")
+			fmt.Println("Stopping WebSocket Manager...")
 			return
 		}
 	}
