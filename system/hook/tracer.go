@@ -1,21 +1,28 @@
-package main
+package hook
 
 import (
 	"bufio"
-	"encoding/json"
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	TargetBinary = "/usr/local/bin/monad-node"
-	TargetOffset = "0x96C720"
+	FallbackBinary = "/usr/local/bin/monad-node"
+	FallbackOffset = "0x96C720"
 )
 
-// JSON 출력을 위한 최상위 구조체
+type Config struct {
+	TargetPID  string // 모니터링할 PID (비어있으면 전체)
+	BinaryPath string // 바이너리 경로 (예: /usr/bin/node)
+	Offset     string // 오프셋 (예: 0x96C720)
+}
+
 type TraceLog struct {
 	EventType string      `json:"event_type"`
 	Timestamp string      `json:"timestamp"`
@@ -39,9 +46,26 @@ type ExitData struct {
 	ReturnValue string `json:"return_value"`
 }
 
-func main() {
+func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg Config) {
+	defer wg.Done()
+
+	targetBin := cfg.BinaryPath
+	if targetBin == "" {
+		targetBin = FallbackBinary
+	}
+
+	targetOffset := cfg.Offset
+	if targetOffset == "" {
+		targetOffset = FallbackOffset
+	}
+
+	pidFilter := ""
+	if cfg.TargetPID != "" {
+		pidFilter = fmt.Sprintf(" /pid == %s/ ", cfg.TargetPID)
+	}
+
 	bpftraceScript := fmt.Sprintf(`
-    uprobe:%s:%s {
+    uprobe:%s:%s %s {
         @start[tid] = nsecs;
         printf("E|%%d|%%d|%%s|%%s|%%s|0x%%lx|0x%%lx|0x%%lx|0x%%lx|0x%%lx|0x%%lx\n", 
             pid, tid, strftime("%%H:%%M:%%S.%%f", nsecs), 
@@ -49,7 +73,7 @@ func main() {
             arg0, arg1, arg2, arg3, arg4, arg5);
     }
 
-    uretprobe:%s:%s {
+    uretprobe:%s:%s %s {
         if (@start[tid]) {
             $dur_ns = nsecs - @start[tid];
             printf("X|%%d|%%d|%%d|%%s|0x%%lx\n", 
@@ -57,33 +81,29 @@ func main() {
             delete(@start[tid]);
         }
     }
-    `, TargetBinary, TargetOffset, TargetBinary, TargetOffset)
+    `, targetBin, targetOffset, pidFilter, targetBin, targetOffset, pidFilter)
 
-	cmd := exec.Command("bpftrace", "-e", bpftraceScript)
+	cmd := exec.CommandContext(ctx, "bpftrace", "-e", bpftraceScript)
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		fmt.Println("Pipe error:", err)
+		log.Printf("❌ [Hook] Pipe error: %v\n", err)
 		return
 	}
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		fmt.Println("Start error:", err)
+		log.Printf("❌ [Hook] Start error (Check sudo permissions): %v\n", err)
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "Tracing %s (Offset %s)...\n", TargetBinary, TargetOffset)
-	fmt.Fprintln(os.Stderr, "----------------------------------------------------------------------------------")
+	fmt.Printf("🟢 [Hook] Started tracing %s (Offset: %s, PID Filter: %s)\n", targetBin, targetOffset, cfg.TargetPID)
 
 	scanner := bufio.NewScanner(stdout)
-
-	// [중요 변경] JSON 인코더 생성 및 HTML 이스케이프 비활성화
-	encoder := json.NewEncoder(os.Stdout)
-	encoder.SetEscapeHTML(false) // <--- 이 부분이 추가되었습니다!
-
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "Attaching") {
+
+		if strings.HasPrefix(line, "Attaching") || line == "" {
 			continue
 		}
 
@@ -93,53 +113,55 @@ func main() {
 		}
 
 		eventType := parts[0]
+		var logEntry TraceLog
+		isValid := false
 
 		if eventType == "E" && len(parts) >= 12 {
-			pid := parts[1]
-			tid := parts[2]
-			timeStr := parts[3]
-			targetRaw := parts[4]
-			callerRaw := parts[5]
-			args := parts[6:12]
-
-			logEntry := TraceLog{
+			logEntry = TraceLog{
 				EventType: "ENTER",
-				Timestamp: timeStr,
-				PID:       pid,
-				TID:       tid,
+				Timestamp: parts[3],
+				PID:       parts[1],
+				TID:       parts[2],
 				Data: EnterData{
-					TargetRaw:   targetRaw,
-					TargetClean: cleanSymbol(targetRaw),
-					CallerRaw:   callerRaw,
-					CallerClean: cleanSymbol(callerRaw),
-					Args:        args,
+					TargetRaw:   parts[4],
+					TargetClean: cleanSymbol(parts[4]),
+					CallerRaw:   parts[5],
+					CallerClean: cleanSymbol(parts[5]),
+					Args:        parts[6:12],
 				},
 			}
-			encoder.Encode(logEntry)
-
+			isValid = true
 		} else if eventType == "X" && len(parts) >= 6 {
-			pid := parts[1]
-			tid := parts[2]
-			durNs := parts[3]
-			backToRaw := parts[4]
-			retVal := parts[5]
-
-			logEntry := TraceLog{
+			logEntry = TraceLog{
 				EventType: "EXIT",
 				Timestamp: time.Now().Format("15:04:05.000000"),
-				PID:       pid,
-				TID:       tid,
+				PID:       parts[1],
+				TID:       parts[2],
 				Data: ExitData{
-					DurationNs:  durNs,
-					BackToRaw:   backToRaw,
-					BackToClean: cleanSymbol(backToRaw),
-					ReturnValue: retVal,
+					DurationNs:  parts[3],
+					BackToRaw:   parts[4],
+					BackToClean: cleanSymbol(parts[4]),
+					ReturnValue: parts[5],
 				},
 			}
-			encoder.Encode(logEntry)
+			isValid = true
+		}
+
+		if isValid {
+			select {
+			case outChan <- logEntry:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
-	cmd.Wait()
+
+	if err := cmd.Wait(); err != nil {
+		if ctx.Err() == nil {
+			log.Printf("⚠️ [Hook] Process exited with error: %v\n", err)
+		}
+	}
+	fmt.Println("🔴 [Hook] Service stopped.")
 }
 
 func cleanSymbol(sym string) string {
