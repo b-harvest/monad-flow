@@ -2,13 +2,32 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
-	"text/tabwriter"
+	"time"
 )
+
+// 개별 메트릭 정보를 더 세분화하여 정의
+type PerfMetric struct {
+	Event     string `json:"event"`                // 예: cycles
+	Value     string `json:"value"`                // 측정값 (예: 67202022)
+	Unit      string `json:"unit,omitempty"`       // 단위 (예: msec) - 없는 경우 생략
+	MetricVal string `json:"metric_val,omitempty"` // 주요 지표 (예: 3.597 GHz, 0.037 CPUs utilized)
+	RunPct    string `json:"run_pct,omitempty"`    // 실행 비율 (예: 91.90%) - 괄호 안의 값
+}
+
+// 한 주기(Interval)의 데이터를 묶을 구조체
+type PerfLog struct {
+	Timestamp     string       `json:"timestamp"`      // 수집된 시스템 시간
+	PerfTimestamp string       `json:"perf_timestamp"` // perf 실행 후 경과 시간 (예: 0.500506)
+	PID           string       `json:"pid"`
+	Metrics       []PerfMetric `json:"metrics"`
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -16,6 +35,7 @@ func main() {
 	}
 	pid := os.Args[1]
 
+	// perf stat 실행 (-I 500: 500ms 간격)
 	cmd := exec.Command("perf", "stat", "-d", "-p", pid, "-I", "500")
 
 	stderr, err := cmd.StderrPipe()
@@ -27,98 +47,117 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("... PID %s 모니터링 시작 ...\n", pid)
-	log.Println("... Ctrl+C로 종료 ...")
-
-	w := tabwriter.NewWriter(os.Stdout, 0, 8, 2, ' ', 0)
+	log.Printf("... PID %s perf 모니터링 시작 ...\n", pid)
 
 	scanner := bufio.NewScanner(stderr)
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetEscapeHTML(false)
 
-	var lastTimestamp string
+	var currentLog *PerfLog
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
+		// 주석이나 빈 줄 무시
 		if strings.HasPrefix(strings.TrimSpace(line), "#") || len(strings.TrimSpace(line)) == 0 {
 			continue
 		}
 
-		parsed, err := parsePerfLine(line)
+		parsedMetric, perfTs, err := parsePerfLine(line)
 		if err != nil {
-			fmt.Println(line)
 			continue
 		}
 
-		if parsed.Timestamp != lastTimestamp {
-			w.Flush()
-			fmt.Printf("\n[ Time: %s sec ]\n", parsed.Timestamp)
-			fmt.Fprintln(w, "EVENT\tVALUE\tUNIT\tMETRIC")
-			fmt.Fprintln(w, "-----\t-----\t----\t------")
-			lastTimestamp = parsed.Timestamp
+		// 타임스탬프가 바뀌면 이전 로그 덤프 후 초기화
+		if currentLog != nil && currentLog.PerfTimestamp != perfTs {
+			encoder.Encode(currentLog)
+			currentLog = nil
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", parsed.Event, parsed.Value, parsed.Unit, parsed.Metric)
+		if currentLog == nil {
+			currentLog = &PerfLog{
+				Timestamp:     time.Now().Format("2006-01-02 15:04:05.000000"),
+				PerfTimestamp: perfTs,
+				PID:           pid,
+				Metrics:       []PerfMetric{},
+			}
+		}
+		currentLog.Metrics = append(currentLog.Metrics, parsedMetric)
 	}
 
-	w.Flush() // 루프 종료 후 잔여 버퍼 출력
-
-	if err := cmd.Wait(); err != nil {
-		log.Printf("perf 종료: %v", err)
+	if currentLog != nil {
+		encoder.Encode(currentLog)
 	}
+
+	cmd.Wait()
 }
 
-type PerfData struct {
-	Timestamp string
-	Value     string
-	Unit      string
-	Event     string
-	Metric    string
-}
+// 정규식: 괄호로 된 퍼센트 수치 추출용 -> (91.90%)
+var reRunPct = regexp.MustCompile(`\(\s*([\d\.]+%)\s*\)$`)
 
-func parsePerfLine(line string) (PerfData, error) {
-	// 1. # 문자를 기준으로 데이터 부분(앞)과 메트릭 설명(뒤)을 분리
+func parsePerfLine(line string) (PerfMetric, string, error) {
+	// 1. # 기준으로 좌(데이터) 우(설명) 분리
 	parts := strings.SplitN(line, "#", 2)
-	dataPart := strings.TrimSpace(parts[0])
-	metricPart := ""
+	leftSide := strings.TrimSpace(parts[0])
+	rightSide := ""
 	if len(parts) > 1 {
-		metricPart = strings.TrimSpace(parts[1])
+		rightSide = strings.TrimSpace(parts[1])
 	}
 
-	// 2. 데이터 부분을 공백 기준으로 분리
-	fields := strings.Fields(dataPart)
-	if len(fields) < 1 {
-		return PerfData{}, fmt.Errorf("invalid line")
+	fields := strings.Fields(leftSide)
+	if len(fields) < 2 {
+		return PerfMetric{}, "", fmt.Errorf("invalid line")
 	}
 
-	// fields[0] 은 항상 Timestamp
-	p := PerfData{
-		Timestamp: fields[0],
-		Metric:    metricPart,
+	// [0]: Timestamp
+	timestamp := fields[0]
+
+	p := PerfMetric{}
+
+	// 2. 우측(설명) 파싱: MetricVal과 RunPct 분리
+	// 예: "3.597 GHz                               (91.90%)"
+	// MetricVal -> "3.597 GHz"
+	// RunPct    -> "91.90%"
+	if rightSide != "" {
+		// 정규식으로 끝부분에 (xx%)가 있는지 확인
+		match := reRunPct.FindStringSubmatch(rightSide)
+		if len(match) > 1 {
+			p.RunPct = match[1] // 괄호 안의 값만 추출
+			// 원본 문자열에서 (xx%) 부분을 제거하고 나머지를 MetricVal로 설정
+			p.MetricVal = strings.TrimSpace(strings.Replace(rightSide, match[0], "", 1))
+		} else {
+			// 퍼센트가 없으면 전체를 MetricVal로
+			p.MetricVal = rightSide
+		}
 	}
 
-	// 데이터 필드가 부족한 경우 (예: 타임스탬프만 있고 값이 없는 경우)
-	if len(fields) == 1 {
-		p.Event = "(info)"
-		return p, nil
-	}
-
-	// 3. 값과 이벤트명 파싱
-	if strings.Contains(dataPart, "<not supported>") {
+	// 3. 좌측(데이터) 파싱
+	// <not supported> 처리
+	if strings.Contains(leftSide, "<not supported>") {
 		p.Value = "Not Supported"
-		p.Event = fields[len(fields)-1]
+		if len(fields) > 1 {
+			// timestamp 뒤에 나오는 것들을 합쳐서 이벤트명으로 추정
+			p.Event = strings.Join(fields[1:], " ")
+			// "<not supported>" 문자열 제거하고 정리
+			p.Event = strings.TrimSpace(strings.ReplaceAll(p.Event, "<not supported>", ""))
+		}
 	} else {
+		// 일반 포맷: [Timestamp] [Value] [Unit?] [Event]
+		// fields[0]: Timestamp
+		// fields[1]: Value
 		p.Value = fields[1]
+
 		if len(fields) > 2 {
 			if fields[2] == "msec" {
 				p.Unit = "msec"
 				if len(fields) > 3 {
-					p.Event = fields[3]
+					p.Event = strings.Join(fields[3:], " ")
 				}
 			} else {
-				p.Event = fields[2]
+				p.Event = strings.Join(fields[2:], " ")
 			}
 		}
 	}
 
-	return p, nil
+	return p, timestamp, nil
 }
