@@ -127,6 +127,7 @@ func main() {
 			default:
 			}
 			record, err := rd.Read()
+			captureTime := time.Now()
 			if err != nil {
 				if errors.Is(err, ringbuf.ErrClosed) {
 					log.Println("Ring buffer closed")
@@ -163,7 +164,7 @@ func main() {
 				currentMTU := mtu
 				currentRealLen := int(realLen)
 				currentIPv4Len := int(packet.IPv4Layer.Length)
-				go processUdpPacket(decoderCache, &udpMutex, packet, currentMTU, currentRealLen, currentIPv4Len, client, &clientMutex)
+				go processUdpPacket(decoderCache, &udpMutex, packet, currentMTU, currentRealLen, currentIPv4Len, client, &clientMutex, captureTime)
 			}
 		}
 	}()
@@ -190,6 +191,7 @@ func processUdpPacket(
 	ipv4Len int,
 	client *socket.Socket,
 	clientMutex *sync.Mutex,
+	captureTime time.Time,
 ) {
 	if packet.Payload == nil {
 		return
@@ -214,7 +216,7 @@ func processUdpPacket(
 		offset += currentStride
 
 		udpMutex.Lock()
-		_, err := processChunk(decoderCache, packet, chunkData, client, clientMutex)
+		_, err := processChunk(decoderCache, packet, chunkData, client, clientMutex, captureTime)
 		if err != nil {
 			log.Printf("Failed to process chunk: %v", err)
 			udpMutex.Unlock()
@@ -224,12 +226,20 @@ func processUdpPacket(
 	}
 }
 
-func processChunk(decoderCache *decoder.DecoderCache, packet model.Packet, chunkData []byte, client *socket.Socket, clientMutex *sync.Mutex) ([]byte, error) {
+func processChunk(
+	decoderCache *decoder.DecoderCache,
+	packet model.Packet,
+	chunkData []byte,
+	client *socket.Socket,
+	clientMutex *sync.Mutex,
+	captureTime time.Time,
+) ([]byte, error) {
 	chunk, err := parser.ParseMonadChunkPacket(packet, chunkData, client, clientMutex)
 	if err != nil {
 		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
 	}
 
+	// payload 빼고, chunk 도착 시간 측정 후 추가
 	jsonData, err := json.Marshal(chunk)
 	if err != nil {
 		log.Printf("JSON marshaling failed: %s", err)
@@ -237,8 +247,9 @@ func processChunk(decoderCache *decoder.DecoderCache, packet model.Packet, chunk
 	}
 
 	payload := map[string]interface{}{
-		"type": util.MONAD_CHUNK_PACKET_EVENT,
-		"data": json.RawMessage(jsonData),
+		"type":      util.MONAD_CHUNK_PACKET_EVENT,
+		"data":      json.RawMessage(jsonData),
+		"timestamp": captureTime.UnixMicro(),
 	}
 
 	clientMutex.Lock()

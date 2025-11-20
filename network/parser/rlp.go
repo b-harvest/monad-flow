@@ -27,6 +27,7 @@ var httpClient = &http.Client{
 }
 
 func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash string) error {
+	captureTime := time.Now()
 	jsonData, err := json.Marshal(combined)
 	if err != nil {
 		return fmt.Errorf("Error marshaling combined data: %v", err)
@@ -36,6 +37,7 @@ func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash st
 		"type":           util.OUTBOUND_ROUTER_EVENT,
 		"appMessageHash": appMessageHash,
 		"data":           json.RawMessage(jsonData),
+		"timestamp":      captureTime.UnixMicro(),
 	}
 
 	finalBody, err := json.Marshal(payload)
