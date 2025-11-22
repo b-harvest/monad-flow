@@ -8,6 +8,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/joho/godotenv v1.5.1
 	github.com/zishang520/socket.io/clients/socket/v3 v3.0.0-rc.8
+	golang.org/x/sys v0.36.0
 )
 
 require (
@@ -32,7 +33,6 @@ require (
 	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/tools v0.37.0 // indirect
 	resty.dev/v3 v3.0.0-beta.3 // indirect

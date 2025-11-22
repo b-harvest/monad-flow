@@ -13,10 +13,6 @@ import (
 	"unicode"
 )
 
-type Config struct {
-	TargetPID string
-}
-
 type TurbostatMetric struct {
 	Timestamp string  `json:"timestamp"`
 	Core      string  `json:"core"`
@@ -31,7 +27,7 @@ type TurbostatMetric struct {
 	PkgWatt   float64 `json:"pkg_watt"`
 }
 
-func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TurbostatMetric, cfg Config) {
+func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TurbostatMetric) {
 	defer wg.Done()
 
 	path, err := exec.LookPath("turbostat")
