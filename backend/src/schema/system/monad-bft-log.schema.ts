@@ -26,24 +26,11 @@ export class MonadBftLog extends Document {
   timestamp: Date;
 
   /**
-   * 로그 레벨 (예: "6" (info), "3" (err))
-   * (PRIORITY 필드, Go 코드에서 추가 수집 필요)
-   */
-  @Prop({ required: false })
-  priority?: string;
-
-  /**
    * 로그를 생성한 프로세스 ID
    * (_PID 필드, Go 코드에서 추가 수집 필요)
    */
-  @Prop({ required: false })
+  @Prop({ required: true })
   pid?: string;
-
-  /**
-   * 이 로그가 DB에 저장된 시간 (수집 시간)
-   */
-  @Prop({ default: Date.now })
-  createdAt: Date;
 }
 
-export const SystemdLogSchema = SchemaFactory.createForClass(MonadBftLog);
+export const MonadBftLogSchema = SchemaFactory.createForClass(MonadBftLog);
