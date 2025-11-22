@@ -16,6 +16,12 @@ export class OffCpuLog extends Document {
   process_name: string;
 
   /**
+   * 프로세스 ID
+   */
+  @Prop({ required: true, index: true })
+  pid: string;
+
+  /**
    * 스레드 ID
    */
   @Prop({ required: true, index: true })

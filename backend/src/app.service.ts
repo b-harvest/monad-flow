@@ -87,10 +87,11 @@ export class AppService {
   }
 
   async saveBpfTrace(data: any) {
-    this.logger.log(`[DB] Saving BpfTrace(Hook)`);
+    this.logger.log(`[DB] Saving BpfTrace(Hook) func_name=${data.func_name}`);
     const doc = new this.bpfTraceModel({
       event_type: data.event_type,
       timestamp: this.parsedTimestamp(data.timestamp),
+      func_name: data.func_name,
       pid: data.pid,
       tid: data.tid,
       data: data.data,
@@ -100,10 +101,11 @@ export class AppService {
   }
 
   async saveOffCpuEvent(data: any) {
-    this.logger.log(`[DB] Saving OffCpu`);
+    this.logger.log(`[DB] Saving OffCpu pid=${data.pid}`);
     const doc = new this.offCpuModel({
       timestamp: new Date(data.timestamp),
       process_name: data.process_name,
+      pid: data.pid,
       tid: data.tid,
       duration_us: data.duration_us,
       stack: data.stack,
@@ -112,7 +114,7 @@ export class AppService {
   }
 
   async saveSchedulerEvent(data: any) {
-    this.logger.log(`[DB] Saving Scheduler`);
+    this.logger.log(`[DB] Saving Scheduler pid=${data.main_pid}`);
     const doc = new this.schedulerModel({
       timestamp: new Date(data.timestamp),
       main_pid: data.main_pid,
@@ -126,7 +128,7 @@ export class AppService {
   }
 
   async savePerfStatEvent(data: any) {
-    this.logger.log(`[DB] Saving PerfStat`);
+    this.logger.log(`[DB] Saving PerfStat pid=${data.pid}`);
     const doc = new this.perfStatModel({
       timestamp: new Date(data.timestamp),
       perf_timestamp: parseFloat(data.perf_timestamp),
