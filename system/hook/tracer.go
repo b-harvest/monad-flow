@@ -1,216 +1,194 @@
-package hook
+package main
 
 import (
-	"bufio"
-	"context"
+	"encoding/json"
 	"fmt"
-	"log"
 	"os"
-	"os/exec"
+	"os/signal"
+	"strconv"
 	"strings"
-	"sync"
-	"time"
+	"syscall"
 
-	"golang.org/x/sys/unix"
+	"github.com/frida/frida-go/frida"
 )
 
-func init() {
-    var rLimit unix.Rlimit
-    rLimit.Max = 1048576 
-    rLimit.Cur = 1048576
-    if err := unix.Setrlimit(unix.RLIMIT_NOFILE, &rLimit); err != nil {
-        log.Printf("[Init] Failed to set RLIMIT_NOFILE: %v", err)
-    }
-
-    rLimit.Max = unix.RLIM_INFINITY
-    rLimit.Cur = unix.RLIM_INFINITY
-    if err := unix.Setrlimit(unix.RLIMIT_MEMLOCK, &rLimit); err != nil {
-        log.Printf("[Init] Failed to set RLIMIT_MEMLOCK: %v", err)
-    }
-    
-    log.Println("[Init] System resource limits raised successfully.")
+// --- [Frida 메시지 껍데기 구조체] ---
+type FridaEnvelope struct {
+	Type    string          `json:"type"`    // "send" 또는 "error"
+	Payload json.RawMessage `json:"payload"` // 실제 우리가 보낸 데이터
 }
 
-const (
-	FallbackBinary = "/usr/local/bin/monad-node"
-)
-
-type HookTarget struct {
-	Name   string // 로그에서 구분할 함수 별칭 (예: "ProcessTx", "UpdateState")
-	Offset string // 후킹할 메모리 오프셋 (예: "0x96C720")
-}
-
-type Config struct {
-	TargetPID  string       // 모니터링할 PID (비어있으면 전체)
-	BinaryPath string       // 바이너리 경로
-	Targets    []HookTarget // 다중 후킹 대상 리스트
-}
-
+// --- [사용자 정의 데이터 구조체] ---
 type TraceLog struct {
-	EventType string      `json:"event_type"`
-	FuncName  string      `json:"func_name"`
-	Timestamp string      `json:"timestamp"`
-	PID       string      `json:"pid"`
-	TID       string      `json:"tid"`
-	Data      interface{} `json:"data"`
+	EventType  string          `json:"event_type"`
+	FuncName   string          `json:"func_name"`
+	PID        string          `json:"pid"`
+	TID        string          `json:"tid"`
+	DurationNs string          `json:"duration_ns,omitempty"`
+	Data       json.RawMessage `json:"data"`
 }
 
 type EnterData struct {
-	TargetRaw   string   `json:"func_raw"`
-	TargetClean string   `json:"func_clean"`
-	CallerRaw   string   `json:"caller_raw"`
-	CallerClean string   `json:"caller_clean"`
-	Args        []string `json:"args_hex"`
+	Timestamp      string   `json:"timestamp"`
+	CallerFuncName string   `json:"caller_name"`
+	Args           []string `json:"args_hex"`
 }
 
 type ExitData struct {
-	DurationNs  string `json:"duration_ns"`
-	BackToRaw   string `json:"back_to_raw"`
-	BackToClean string `json:"back_to_clean"`
-	ReturnValue string `json:"return_value"`
+	Timestamp      string `json:"timestamp"`
+	BackToFuncName string `json:"back_to_name"`
+	ReturnValue    string `json:"return_value"`
 }
 
-func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg Config) {
-	defer wg.Done()
+var targetFunctions = []string{
+	"_ZN5monad10BlockState6commitERKN4evmc7bytes32ERKNS_11BlockHeaderERKSt6vectorINS_7ReceiptESaIS9_EERKS8_IS8_INS_9CallFrameESaISE_EESaISG_EERKS8_INS1_7addressESaISL_EERKS8_INS_11TransactionESaISQ_EERKS8_IS5_SaIS5_EERKSt8optionalIS8_INS_10WithdrawalESaIS10_EEE",
+}
 
-	targetBin := cfg.BinaryPath
-	if targetBin == "" {
-		targetBin = FallbackBinary
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: sudo ./hooker <PID>")
+		os.Exit(1)
 	}
+	pid, _ := strconv.Atoi(os.Args[1])
 
-	if len(cfg.Targets) == 0 {
-		log.Println("[Hook] No targets specified.")
-		return
-	}
+	manager := frida.NewDeviceManager()
+	devices, _ := manager.EnumerateDevices()
+	localDevice := devices[0]
 
-	pidFilter := ""
-	if cfg.TargetPID != "" {
-		pidFilter = fmt.Sprintf(" /pid == %s/ ", cfg.TargetPID)
-	}
-
-	var bpfScript strings.Builder
-
-	for i, target := range cfg.Targets {
-		fnId := i
-
-		entryBlock := fmt.Sprintf(`
-		uprobe:%s:%s %s {
-			@start[tid, %d] = nsecs;
-			printf("E|%s|%%d|%%d|%%s|%%s|%%s|0x%%lx|0x%%lx|0x%%lx|0x%%lx|0x%%lx|0x%%lx\n", 
-				pid, tid, strftime("%%Y-%%m-%%d %%H:%%M:%%S.%%f", nsecs), 
-				usym(reg("ip")), usym(*reg("sp")),
-				arg0, arg1, arg2, arg3, arg4, arg5);
-		}
-		`, targetBin, target.Offset, pidFilter, fnId, target.Name)
-
-		bpfScript.WriteString(entryBlock)
-
-		exitBlock := fmt.Sprintf(`
-		uretprobe:%s:%s %s {
-			$start_time = @start[tid, %d];
-			if ($start_time) {
-				$dur_ns = nsecs - $start_time;
-				printf("X|%s|%%d|%%d|%%d|%%s|0x%%lx\n", 
-					pid, tid, $dur_ns, usym(reg("ip")), retval);
-				delete(@start[tid, %d]);
-			}
-		}
-		`, targetBin, target.Offset, pidFilter, fnId, target.Name, fnId)
-
-		bpfScript.WriteString(exitBlock)
-	}
-
-	cmd := exec.CommandContext(ctx, "bpftrace", "-e", bpfScript.String())
-
-	stdout, err := cmd.StdoutPipe()
+	fmt.Printf("[*] Attaching to PID: %d ...\n", pid)
+	session, err := localDevice.Attach(pid, nil)
 	if err != nil {
-		log.Printf("[Hook] Pipe error: %v\n", err)
-		return
+		panic(err)
 	}
-	cmd.Stderr = os.Stderr
+	defer session.Detach()
 
-	if err := cmd.Start(); err != nil {
-		log.Printf("[Hook] Start error (Check sudo permissions): %v\n", err)
-		return
-	}
+	jsCode := generateJSPayload(targetFunctions)
+	script, _ := session.CreateScript(jsCode)
 
-	fmt.Printf("[Hook] Started tracing %d targets on %s (PID Filter: %s)\n", len(cfg.Targets), targetBin, cfg.TargetPID)
-
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.HasPrefix(line, "Attaching") || line == "" {
-			continue
+	// --- [메시지 핸들러 수정됨] ---
+	script.On("message", func(message string) {
+		// 1. 먼저 껍데기(Envelope)를 깝니다.
+		var envelope FridaEnvelope
+		if err := json.Unmarshal([]byte(message), &envelope); err != nil {
+			// JSON 형식이 아니면 그냥 출력
+			fmt.Printf("[Raw] %s\n", message)
+			return
 		}
 
-		parts := strings.Split(line, "|")
-		if len(parts) < 3 {
-			continue
-		}
-
-		eventType := parts[0]
-		funcName := parts[1]
-		var logEntry TraceLog
-		isValid := false
-
-		if eventType == "E" && len(parts) >= 13 {
-			logEntry = TraceLog{
-				EventType: "ENTER",
-				FuncName:  funcName,
-				PID:       parts[2],
-				TID:       parts[3],
-				Timestamp: parts[4],
-				Data: EnterData{
-					TargetRaw:   parts[5],
-					TargetClean: cleanSymbol(parts[5]),
-					CallerRaw:   parts[6],
-					CallerClean: cleanSymbol(parts[6]),
-					Args:        parts[7:13],
-				},
-			}
-			isValid = true
-		} else if eventType == "X" && len(parts) >= 7 {
-			logEntry = TraceLog{
-				EventType: "EXIT",
-				FuncName:  funcName,
-				Timestamp: time.Now().Format("2006-01-02 15:04:05.000000"),
-				PID:       parts[2],
-				TID:       parts[3],
-				Data: ExitData{
-					DurationNs:  parts[4],
-					BackToRaw:   parts[5],
-					BackToClean: cleanSymbol(parts[5]),
-					ReturnValue: parts[6],
-				},
-			}
-			isValid = true
-		}
-
-		if isValid {
-			select {
-			case outChan <- logEntry:
-			case <-ctx.Done():
+		// 2. 메시지 타입이 'send'인 경우만 처리
+		if envelope.Type == "send" {
+			var logEntry TraceLog
+			// Payload를 다시 파싱합니다.
+			if err := json.Unmarshal(envelope.Payload, &logEntry); err != nil {
+				fmt.Printf("[Error Parsing Payload] %s\n", string(envelope.Payload))
 				return
 			}
-		}
-	}
 
-	if err := cmd.Wait(); err != nil {
-		if ctx.Err() == nil {
-			log.Printf("[Hook] Process exited with error: %v\n", err)
+			// 3. 로그 출력 로직
+			fmt.Println("---------------------------------------------------")
+			fmt.Printf("[%s] Func: %s (TID: %s)\n", strings.ToUpper(logEntry.EventType), shortenName(logEntry.FuncName), logEntry.TID)
+
+			if logEntry.EventType == "enter" {
+				var d EnterData
+				json.Unmarshal(logEntry.Data, &d)
+				fmt.Printf("   ↳ Caller: %s\n", shortenName(d.CallerFuncName))
+				fmt.Printf("   ↳ Args:   %v\n", d.Args)
+				fmt.Printf("   ↳ Time:   %s\n", d.Timestamp)
+			} else if logEntry.EventType == "exit" {
+				var d ExitData
+				json.Unmarshal(logEntry.Data, &d)
+				fmt.Printf("   ↳ Return: %s\n", d.ReturnValue)
+				fmt.Printf("   ↳ Dur:    %s ns\n", logEntry.DurationNs)
+			}
+		} else if envelope.Type == "error" {
+			// JS 실행 중 에러 발생 시
+			fmt.Printf("[Frida JS Error] %s\n", string(envelope.Payload))
 		}
-	}
-	fmt.Println("[Hook] Service stopped.")
+	})
+
+	script.Load()
+	fmt.Println("[*] Hooks installed. Press Ctrl+C to stop.")
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
 }
 
-func cleanSymbol(sym string) string {
-	s := sym
-	s = strings.ReplaceAll(s, "_$LT$", "<")
-	s = strings.ReplaceAll(s, "$LT$", "<")
-	s = strings.ReplaceAll(s, "$GT$", ">")
-	s = strings.ReplaceAll(s, "$u20$", " ")
-	s = strings.ReplaceAll(s, "$C$", ",")
-	s = strings.ReplaceAll(s, "..", "::")
-	return s
+func shortenName(fullName string) string {
+	if len(fullName) > 60 {
+		return fullName[:25] + "..." + fullName[len(fullName)-25:]
+	}
+	return fullName
+}
+
+func generateJSPayload(symbols []string) string {
+	quotedSymbols := make([]string, len(symbols))
+	for i, s := range symbols {
+		quotedSymbols[i] = fmt.Sprintf("'%s'", s)
+	}
+	jsArrayStr := strings.Join(quotedSymbols, ", ")
+
+	return fmt.Sprintf(`
+		const targetSymbols = [%s];
+		const pid = Process.id.toString();
+
+		function hookFunction(symbolName) {
+			let targetAddr = DebugSymbol.getFunctionByName(symbolName);
+			if (!targetAddr) targetAddr = Module.findExportByName(null, symbolName);
+			if (!targetAddr) { 
+                // 에러도 send로 보내서 Go에서 찍히게 함
+                send({event_type: "error", msg: "Cannot find symbol: " + symbolName});
+                return; 
+            }
+
+			Interceptor.attach(targetAddr, {
+				onEnter: function(args) {
+					this.tid = Process.getCurrentThreadId().toString();
+					this.startTime = new Date(); 
+					const tsString = this.startTime.toISOString();
+
+					let callerSym = DebugSymbol.fromAddress(this.returnAddress);
+					let callerName = callerSym.name ? callerSym.name : this.returnAddress.toString();
+
+					let argsList = [];
+					for (let i = 0; i < 5; i++) {
+						try { argsList.push(args[i].toString()); } catch (e) { argsList.push("0x0"); }
+					}
+
+					send({
+						event_type: "enter",
+						func_name: symbolName,
+						pid: pid,
+						tid: this.tid,
+						duration_ns: "0",
+						data: {
+							timestamp: tsString,
+							caller_name: callerName,
+							args_hex: argsList
+						}
+					});
+				},
+
+				onLeave: function(retval) {
+					const endTime = new Date();
+					const durationMs = endTime.getTime() - this.startTime.getTime();
+					const durationNs = (durationMs * 1000000).toString();
+
+					send({
+						event_type: "exit",
+						func_name: symbolName,
+						pid: pid,
+						tid: this.tid,
+						duration_ns: durationNs,
+						data: {
+							timestamp: endTime.toISOString(),
+							back_to_name: "caller", 
+							return_value: retval.toString()
+						}
+					});
+				}
+			});
+		}
+		targetSymbols.forEach(hookFunction);
+	`, jsArrayStr)
 }
