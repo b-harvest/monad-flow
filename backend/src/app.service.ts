@@ -139,6 +139,7 @@ export class AppService {
       event_type: data.event_type,
       func_name: data.func_name,
       pid: data.pid,
+      timestamp: data.timestamp,
       duration_ns: data.duration_ns,
       data: data.data,
     });
