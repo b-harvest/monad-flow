@@ -1,51 +1,17 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
-
-class BpfEnterData {
-  @Prop()
-  func_raw?: string;
-
-  @Prop()
-  func_clean?: string;
-
-  @Prop()
-  caller_raw?: string;
-
-  @Prop()
-  caller_clean?: string;
-
-  @Prop({ type: [String] })
-  args_hex?: string[];
-}
-
-class BpfExitData {
-  @Prop()
-  duration_ns?: string;
-
-  @Prop()
-  back_to_raw?: string;
-
-  @Prop()
-  back_to_clean?: string;
-
-  @Prop()
-  return_value?: string;
-}
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class BpfTraceLog extends Document {
   /**
-   * ENTER 또는 EXIT
+   * enter | exit
    */
-  @Prop({ required: true, enum: ['ENTER', 'EXIT'], index: true })
-  event_type: 'ENTER' | 'EXIT';
+  @Prop({ required: true, enum: ['enter', 'exit'], index: true })
+  event_type: 'enter' | 'exit';
 
   /**
-   * 로그 타임스탬프
+   * 함수 이름
    */
-  @Prop({ required: true })
-  timestamp: Date;
-
   @Prop({ required: true })
   func_name: string;
 
@@ -56,29 +22,17 @@ export class BpfTraceLog extends Document {
   pid: string;
 
   /**
-   * Thread ID
+   * exit일 때만 존재
    */
-  @Prop({ required: true })
-  tid: string;
+  @Prop()
+  duration_ns?: string;
 
   /**
-   * BPF trace payload
-   * (ENTER or EXIT depending on event_type)
+   * EnterData 또는 ExitData
+   * Timestamp / Caller / Args / BackToName / ReturnValue 등이 포함됨
    */
-  @Prop({
-    type: {
-      func_raw: String,
-      func_clean: String,
-      caller_raw: String,
-      caller_clean: String,
-      args_hex: [String],
-      duration_ns: String,
-      back_to_raw: String,
-      back_to_clean: String,
-      return_value: String,
-    },
-  })
-  data: BpfEnterData | BpfExitData;
+  @Prop({ type: MongooseSchema.Types.Mixed, required: true })
+  data: any;
 }
 
 export const BpfTraceLogSchema = SchemaFactory.createForClass(BpfTraceLog);

@@ -90,10 +90,9 @@ export class AppService {
     this.logger.log(`[DB] Saving BpfTrace(Hook) func_name=${data.func_name}`);
     const doc = new this.bpfTraceModel({
       event_type: data.event_type,
-      timestamp: this.parsedTimestamp(data.timestamp),
       func_name: data.func_name,
       pid: data.pid,
-      tid: data.tid,
+      duration_ns: data.duration_ns,
       data: data.data,
     });
 
@@ -228,14 +227,5 @@ export class AppService {
       timestamp: new Date(timestamp / 1000),
     });
     return doc.save();
-  }
-
-  private parsedTimestamp(timestamp: string): Date {
-    return new Date(
-      timestamp.replace(' ', 'T').replace(/(\.\d{6})$/, (m) => {
-        const ms = Math.floor(Number(m) * 1000);
-        return `.${ms}Z`;
-      }),
-    );
   }
 }
