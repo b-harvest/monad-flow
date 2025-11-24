@@ -1,862 +1,352 @@
 # Design System - Monad Flow
 
-## Design Philosophy
+## Brand North Star
 
-**Monad Flow** is a professional blockchain monitoring platform with core values of **clarity**, **efficiency**, and **reliability**.
+Monad Flow의 인터페이스는 **시각적 정확성**, **실시간 반응성**, **신뢰성 있는 데이터 표현**을 최우선으로 한다. 모든 화면은 모니터링 전문가가 단 3초 만에 핵심 이상 징후를 발견할 수 있도록 설계된다.
 
-### Core Principles
+### 브랜드 원칙
+1. **Precision UI**: 모든 수치·상태는 명확한 대비와 모노스페이스 타입으로 노이즈 없이 전달한다.
+2. **Kinetic Feedback**: 인터랙션과 애니메이션은 실시간 상태 변화를 직관적으로 보여주는 도구다.
+3. **Operational Calm**: 다크 모드 기반의 깊이감 있는 팔레트로 장시간 관찰에도 피로를 최소화한다.
+4. **Accessibility First**: 키보드, 스크린리더, 고대비 요구 사항을 기본값으로 둔다.
+5. **Performance Conscious**: 60FPS 유지와 빠른 첫 렌더가 모든 UI 토큰 결정의 기준이다.
 
-1. **Data-First**: Information must be communicated clearly
-2. **Speed**: Intuitive UI for fast decision-making
-3. **Trust**: Stable and reliable visual language
-4. **Accessibility**: Interface accessible to all users
-5. **Elegance**: Sophisticated and modern design
+---
+
+## Identity Snapshot
+
+| Asset | Primary Use | Notes |
+|-------|-------------|-------|
+| **Britti Sans** | Headlines, hero titles, KPI 스포트라이트 | 대문자 대비가 크므로 타이틀에만 사용, 서브픽스는 Inter로 보완 |
+| **Inter** | 본문, 설명 텍스트, 표 기본값 | 다국어 렌더링 안정성 확보, 숫자/단위 표기 시 Roboto Mono와 섞지 않는다 |
+| **Roboto Mono** | 라벨, 버튼, 링크, 코드, 데코 수치 | `font-variant-numeric: tabular-nums` 기본 적용 |
+| **#6E54FF** | 핵심 브랜드 컬러 | CTA, 선택 상태, 주 그래프 라인 |
+| **#85E6FF · #FF8EE4 · #FFAE45** | 보조 액센트 | 실시간 이벤트 유형 별 컬러 태깅 |
+| **#0E091C** | 기본 배경 | 3D 시각화, 패널, HUD의 공통 배경 |
+| **#FFFFFF / #000000** | 대비용 텍스트 | 다크 모드에서는 #FFFFFF 80% 투명도로 사용 |
 
 ---
 
 ## Color System
 
-### Brand Colors
-
+### Brand Palette
 ```css
-/* Primary - Monad Purple/Blue */
---color-primary-50: #f0f4ff
---color-primary-100: #e0e9ff
---color-primary-200: #c7d7fe
---color-primary-300: #a5bbfc
---color-primary-400: #8195f8
---color-primary-500: #6366f1  /* Main brand color */
---color-primary-600: #4f46e5
---color-primary-700: #4338ca
---color-primary-800: #3730a3
---color-primary-900: #312e81
+:root {
+  /* Core Purple */
+  --color-primary-900: #0e091c;
+  --color-primary-700: #6e54ff; /* Signature Britti highlight */
+  --color-primary-500: #8f7bff;
+  --color-primary-300: #b8a7ff;
+  --color-primary-100: #ddd7fe;
+  --color-primary-050: #f3f1ff;
 
-/* Accent - Cyan */
---color-accent-50: #ecfeff
---color-accent-100: #cffafe
---color-accent-200: #a5f3fc
---color-accent-300: #67e8f9
---color-accent-400: #22d3ee
---color-accent-500: #06b6d4  /* Main accent */
---color-accent-600: #0891b2
---color-accent-700: #0e7490
---color-accent-800: #155e75
---color-accent-900: #164e63
+  /* Secondary Accents */
+  --color-secondary-cyan: #85e6ff;
+  --color-secondary-icy: #b9e3f9;
+  --color-secondary-magenta: #ff8ee4;
+  --color-secondary-amber: #ffae45;
+}
 ```
 
-### Semantic Colors
-
+### Neutrals & Surfaces (Dark-first)
 ```css
-/* Success - Green (Price Up) */
---color-success-50: #f0fdf4
---color-success-100: #dcfce7
---color-success-200: #bbf7d0
---color-success-300: #86efac
---color-success-400: #4ade80
---color-success-500: #22c55e  /* Main success */
---color-success-600: #16a34a
---color-success-700: #15803d
---color-success-800: #166534
---color-success-900: #14532d
+:root {
+  --color-bg-primary: #0e091c;
+  --color-bg-secondary: #141128;
+  --color-bg-tertiary: #1c1934;
+  --color-bg-elevated: #242043;
 
-/* Danger - Red (Price Down) */
---color-danger-50: #fef2f2
---color-danger-100: #fee2e2
---color-danger-200: #fecaca
---color-danger-300: #fca5a5
---color-danger-400: #f87171
---color-danger-500: #ef4444  /* Main danger */
---color-danger-600: #dc2626
---color-danger-700: #b91c1c
---color-danger-800: #991b1b
---color-danger-900: #7f1d1d
+  --color-border-primary: #312c56;
+  --color-border-secondary: #3f3970;
+  --color-border-faint: rgba(255, 255, 255, 0.08);
 
-/* Warning - Orange/Yellow */
---color-warning-50: #fffbeb
---color-warning-100: #fef3c7
---color-warning-200: #fde68a
---color-warning-300: #fcd34d
---color-warning-400: #fbbf24
---color-warning-500: #f59e0b  /* Main warning */
---color-warning-600: #d97706
---color-warning-700: #b45309
---color-warning-800: #92400e
---color-warning-900: #78350f
-
-/* Info - Blue */
---color-info-500: #3b82f6
---color-info-600: #2563eb
+  --color-text-primary: #f6f4ff;
+  --color-text-secondary: rgba(255, 255, 255, 0.7);
+  --color-text-tertiary: rgba(255, 255, 255, 0.45);
+  --color-text-inverse: #000000;
+}
 ```
 
-### Neutral Colors (Dark Theme Primary)
-
+### Semantic Palette
 ```css
-/* Background & Surface */
---color-bg-primary: #0a0a0f      /* Main background */
---color-bg-secondary: #13131a    /* Cards, panels */
---color-bg-tertiary: #1a1a24     /* Hover states */
---color-bg-elevated: #22222e     /* Modals, dropdowns */
+:root {
+  --color-success-500: #22c55e;
+  --color-danger-500: #ef4444;
+  --color-warning-500: #f59e0b;
+  --color-info-500: #3b82f6;
 
-/* Borders */
---color-border-primary: #2a2a3a
---color-border-secondary: #3a3a4a
---color-border-accent: #4a4a5a
-
-/* Text */
---color-text-primary: #f5f5f7     /* Main text */
---color-text-secondary: #a1a1aa   /* Secondary text */
---color-text-tertiary: #71717a    /* Disabled, placeholder */
---color-text-inverse: #0a0a0f     /* On light backgrounds */
+  --color-success-bg: rgba(34, 197, 94, 0.12);
+  --color-danger-bg: rgba(239, 68, 68, 0.16);
+  --color-warning-bg: rgba(245, 158, 11, 0.14);
+  --color-info-bg: rgba(59, 130, 246, 0.16);
+}
 ```
 
-### Light Theme (Optional)
-
+### Gradients & Glow
 ```css
-/* Background & Surface */
---color-bg-primary-light: #ffffff
---color-bg-secondary-light: #f9fafb
---color-bg-tertiary-light: #f3f4f6
---color-bg-elevated-light: #ffffff
+:root {
+  --gradient-primary: linear-gradient(140deg, #6e54ff 0%, #8f7bff 45%, #ff8ee4 100%);
+  --gradient-cyan: linear-gradient(135deg, #85e6ff 0%, #6bd3ff 100%);
+  --gradient-amber: linear-gradient(135deg, #ffae45 0%, #ff8f45 100%);
+  --gradient-overlay: linear-gradient(180deg, rgba(14, 9, 28, 0) 0%, rgba(14, 9, 28, 0.9) 100%);
 
-/* Borders */
---color-border-primary-light: #e5e7eb
---color-border-secondary-light: #d1d5db
---color-border-accent-light: #9ca3af
-
-/* Text */
---color-text-primary-light: #111827
---color-text-secondary-light: #6b7280
---color-text-tertiary-light: #9ca3af
+  --shadow-glow-primary: 0 0 30px rgba(110, 84, 255, 0.45);
+  --shadow-glow-cyan: 0 0 28px rgba(133, 230, 255, 0.4);
+  --shadow-glow-danger: 0 0 32px rgba(239, 68, 68, 0.45);
+}
 ```
 
-### Chart Colors
-
-```css
-/* For multiple data series */
---chart-color-1: #6366f1  /* Primary */
---chart-color-2: #06b6d4  /* Accent */
---chart-color-3: #8b5cf6  /* Purple */
---chart-color-4: #ec4899  /* Pink */
---chart-color-5: #f59e0b  /* Orange */
---chart-color-6: #10b981  /* Green */
-```
-
-### Gradient Overlays
-
-```css
-/* For hero sections, cards */
---gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)
---gradient-accent: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)
---gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%)
---gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%)
-
-/* Subtle overlays */
---gradient-overlay: linear-gradient(180deg, rgba(10,10,15,0) 0%, rgba(10,10,15,0.8) 100%)
---gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)
-```
+Color usage rules:
+- 기본 배경(캔버스, HUD)은 항상 `--color-bg-primary` 또는 overlay 변형을 사용한다.
+- CTA, 강조 KPI, 3D 리더 노드에는 `--color-primary-700`을 사용하고, hover 시 gradient를 적용한다.
+- WebSocket 이벤트 태그는 secondary 컬러 4종을 순환 배정해 유형 식별을 돕는다.
+- 실패/에러 시각화는 danger 팔레트 + primary glow로 이중 대비를 확보한다.
 
 ---
 
-## Typography
+## Typography System
 
-### Font Family
-
+### Font Families
 ```css
-/* Primary */
---font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif
-
-/* Monospace (for numbers, code) */
---font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Courier New', monospace
-
-/* Display (optional, for headings) */
---font-display: 'Inter', sans-serif
+:root {
+  --font-display: 'Britti Sans', 'Inter', sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Roboto Mono', 'JetBrains Mono', 'Fira Code', monospace;
+}
 ```
 
-### Font Sizes
+Usage notes:
+- Britti Sans는 제목과 KPI에만 사용한다. 본문이나 설명 텍스트에서는 Inter를 사용한다.
+- Roboto Mono는 버튼, 라벨, 링크, 코드 스니펫, 수치 텍스트에 적용한다. `letter-spacing: 0.02em`으로 가독성을 높인다.
 
+### Type Scale
 ```css
---text-xs: 0.75rem      /* 12px */
---text-sm: 0.875rem     /* 14px */
---text-base: 1rem       /* 16px */
---text-lg: 1.125rem     /* 18px */
---text-xl: 1.25rem      /* 20px */
---text-2xl: 1.5rem      /* 24px */
---text-3xl: 1.875rem    /* 30px */
---text-4xl: 2.25rem     /* 36px */
---text-5xl: 3rem        /* 48px */
---text-6xl: 3.75rem     /* 60px */
+:root {
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.75rem;
+
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+}
 ```
 
-### Font Weights
-
+Component classes:
 ```css
---font-light: 300
---font-normal: 400
---font-medium: 500
---font-semibold: 600
---font-bold: 700
---font-extrabold: 800
-```
-
-### Line Heights
-
-```css
---leading-none: 1
---leading-tight: 1.25
---leading-snug: 1.375
---leading-normal: 1.5
---leading-relaxed: 1.625
---leading-loose: 2
-```
-
-### Typography Scale
-
-```css
-/* Display */
-.text-display-large {
-  font-size: var(--text-6xl);
-  font-weight: var(--font-bold);
+.text-display-hero {
+  font-family: var(--font-display);
+  font-size: var(--text-5xl);
+  font-weight: 700;
   line-height: var(--leading-tight);
   letter-spacing: -0.02em;
 }
 
-.text-display {
-  font-size: var(--text-5xl);
-  font-weight: var(--font-bold);
-  line-height: var(--leading-tight);
-  letter-spacing: -0.015em;
-}
-
-/* Headings */
-.text-h1 {
-  font-size: var(--text-4xl);
-  font-weight: var(--font-bold);
-  line-height: var(--leading-tight);
-}
-
-.text-h2 {
+.text-title {
+  font-family: var(--font-display);
   font-size: var(--text-3xl);
-  font-weight: var(--font-semibold);
+  font-weight: 600;
   line-height: var(--leading-snug);
-}
-
-.text-h3 {
-  font-size: var(--text-2xl);
-  font-weight: var(--font-semibold);
-  line-height: var(--leading-snug);
-}
-
-.text-h4 {
-  font-size: var(--text-xl);
-  font-weight: var(--font-semibold);
-  line-height: var(--leading-normal);
-}
-
-/* Body */
-.text-body-large {
-  font-size: var(--text-lg);
-  font-weight: var(--font-normal);
-  line-height: var(--leading-relaxed);
 }
 
 .text-body {
+  font-family: var(--font-sans);
   font-size: var(--text-base);
-  font-weight: var(--font-normal);
+  font-weight: 400;
   line-height: var(--leading-normal);
 }
 
-.text-body-small {
+.text-label {
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
-  font-weight: var(--font-normal);
-  line-height: var(--leading-normal);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
-/* Numbers (for prices, metrics) */
 .text-number {
   font-family: var(--font-mono);
-  font-weight: var(--font-semibold);
+  font-size: var(--text-lg);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-
-/* Labels */
-.text-label {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.text-caption {
-  font-size: var(--text-xs);
-  font-weight: var(--font-normal);
-  line-height: var(--leading-normal);
-}
 ```
+
+### Motion & Micro-interaction Typography
+- 인터랙션 중 제목이 변할 때는 `0.2s ease-out`으로 scale/opacity를 동기화한다.
+- 실시간 수치 업데이트는 `font-variation-settings`/`Opacity` 조정 대신 색상과 weight를 이용한다 (화면 떨림 방지).
 
 ---
 
-## Spacing System
+## Spacing & Layout
 
-### Base Unit: 4px
-
-```css
---space-0: 0
---space-1: 0.25rem    /* 4px */
---space-2: 0.5rem     /* 8px */
---space-3: 0.75rem    /* 12px */
---space-4: 1rem       /* 16px */
---space-5: 1.25rem    /* 20px */
---space-6: 1.5rem     /* 24px */
---space-8: 2rem       /* 32px */
---space-10: 2.5rem    /* 40px */
---space-12: 3rem      /* 48px */
---space-16: 4rem      /* 64px */
---space-20: 5rem      /* 80px */
---space-24: 6rem      /* 96px */
---space-32: 8rem      /* 128px */
-```
-
-### Component-Specific Spacing
+- 기본 단위: 4px (`--space-1 = 0.25rem`).
+- 여백은 4, 8, 12, 16, 24, 32, 40, 64px 계열을 준수한다.
+- 카드/패널 내부는 `var(--space-6)` 이상의 padding을 유지한다 (데이터 밀도를 확보하면서도 시각적 호흡 확보).
 
 ```css
-/* Padding */
---padding-xs: var(--space-2) var(--space-3)
---padding-sm: var(--space-3) var(--space-4)
---padding-md: var(--space-4) var(--space-6)
---padding-lg: var(--space-6) var(--space-8)
---padding-xl: var(--space-8) var(--space-12)
-
-/* Gap */
---gap-xs: var(--space-2)
---gap-sm: var(--space-3)
---gap-md: var(--space-4)
---gap-lg: var(--space-6)
---gap-xl: var(--space-8)
+:root {
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+}
 ```
+
+### Grid & Breakpoints
+```css
+:root {
+  --container-sm: 640px;
+  --container-md: 1024px;
+  --container-lg: 1280px;
+  --container-xl: 1440px;
+
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1440px;
+}
+```
+- Desktop: 12-column grid, `gap: var(--space-6)`.
+- Tablet: 8-column grid, `gap: var(--space-4)`.
+- Mobile: 4-column grid, `gap: var(--space-3)`.
 
 ---
 
-## Border Radius
+## Elevation & Radius
 
 ```css
---radius-none: 0
---radius-sm: 0.25rem    /* 4px */
---radius-md: 0.5rem     /* 8px */
---radius-lg: 0.75rem    /* 12px */
---radius-xl: 1rem       /* 16px */
---radius-2xl: 1.5rem    /* 24px */
---radius-full: 9999px   /* Fully rounded */
-```
+:root {
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
 
-### Component Radius
-
-```css
---radius-button: var(--radius-md)
---radius-input: var(--radius-md)
---radius-card: var(--radius-lg)
---radius-modal: var(--radius-xl)
---radius-badge: var(--radius-full)
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-sm: 0 3px 8px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 10px 20px rgba(8, 5, 20, 0.55);
+  --shadow-lg: 0 18px 35px rgba(8, 5, 20, 0.65);
+}
 ```
+- 카드: `--radius-lg`, `--shadow-sm`.
+- 모달/HUD: `--radius-xl`, `--shadow-lg` + glow.
+- 배지/토글: `--radius-full`.
 
 ---
 
-## Shadows
+## Motion
 
 ```css
-/* Elevation */
---shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05)
---shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)
---shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)
---shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.1)
---shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)
---shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25)
+:root {
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
 
-/* Glow effects (for dark theme) */
---shadow-glow-primary: 0 0 20px rgba(99, 102, 241, 0.3)
---shadow-glow-success: 0 0 20px rgba(34, 197, 94, 0.3)
---shadow-glow-danger: 0 0 20px rgba(239, 68, 68, 0.3)
-
-/* Inner shadow */
---shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06)
-```
-
----
-
-## Animation & Transitions
-
-### Duration
-
-```css
---duration-instant: 100ms
---duration-fast: 150ms
---duration-normal: 250ms
---duration-slow: 350ms
---duration-slower: 500ms
-```
-
-### Easing
-
-```css
---ease-in: cubic-bezier(0.4, 0, 1, 1)
---ease-out: cubic-bezier(0, 0, 0.2, 1)
---ease-in-out: cubic-bezier(0.4, 0, 0.2, 1)
---ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1)
---ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55)
-```
-
-### Transitions
-
-```css
-/* Standard transitions */
---transition-all: all var(--duration-normal) var(--ease-in-out)
---transition-color: color var(--duration-fast) var(--ease-in-out)
---transition-bg: background-color var(--duration-fast) var(--ease-in-out)
---transition-transform: transform var(--duration-normal) var(--ease-out)
---transition-opacity: opacity var(--duration-fast) var(--ease-in-out)
-```
-
-### Animation Presets
-
-```javascript
-// Framer Motion variants
-export const fadeIn = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-  transition: { duration: 0.25 }
-}
-
-export const slideUp = {
-  initial: { y: 20, opacity: 0 },
-  animate: { y: 0, opacity: 1 },
-  exit: { y: -20, opacity: 0 },
-  transition: { duration: 0.3, ease: 'easeOut' }
-}
-
-export const scaleIn = {
-  initial: { scale: 0.95, opacity: 0 },
-  animate: { scale: 1, opacity: 1 },
-  exit: { scale: 0.95, opacity: 0 },
-  transition: { duration: 0.2 }
-}
-
-export const slideInFromRight = {
-  initial: { x: 100, opacity: 0 },
-  animate: { x: 0, opacity: 1 },
-  exit: { x: 100, opacity: 0 },
-  transition: { type: 'spring', stiffness: 300, damping: 30 }
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 ```
+- 상태 변화(성공/실패)에는 `--ease-spring`을 적용해 실시간 반응을 강조한다.
+- 데이터 리프레시 애니메이션은 `frameloop='demand'`와 동기화하여 60FPS를 유지한다.
 
 ---
 
 ## Component Guidelines
 
 ### Buttons
+- Primary: `--color-primary-700` 배경, Britti Sans 대신 Roboto Mono 라벨, hover 시 gradient/outline glow.
+- Secondary: 투명 배경, `--color-border-secondary` 라인, 텍스트는 Inter Medium.
+- Ghost: 배경 없음, hover 시 `--color-bg-tertiary` 적용.
+- Icon Buttons: 40px (lg) / 36px (md) / 32px (sm). padding `var(--space-2)`.
 
-```tsx
-/* Primary Button */
-- Background: var(--color-primary-500)
-- Text: white
-- Hover: var(--color-primary-600)
-- Active: var(--color-primary-700)
-- Padding: var(--padding-sm)
-- Border Radius: var(--radius-button)
-- Font Weight: var(--font-semibold)
-- Transition: all 150ms
-
-/* Secondary Button */
-- Background: transparent
-- Border: 1px solid var(--color-border-secondary)
-- Text: var(--color-text-primary)
-- Hover: var(--color-bg-tertiary)
-
-/* Success/Danger Buttons */
-- Use semantic colors (green/red)
-- Same structure as primary
-
-/* Ghost Button */
-- Background: transparent
-- No border
-- Hover: var(--color-bg-tertiary)
-
-/* Icon Button */
-- Size: 36px × 36px (md), 32px × 32px (sm), 40px × 40px (lg)
-- Padding: var(--space-2)
-- Border Radius: var(--radius-md)
-```
-
-### Cards
-
-```tsx
-/* Standard Card */
-- Background: var(--color-bg-secondary)
-- Border: 1px solid var(--color-border-primary)
-- Border Radius: var(--radius-card)
-- Padding: var(--space-6)
-- Shadow: var(--shadow-sm)
-- Hover: subtle shadow increase
-
-/* Elevated Card (hover state) */
-- Shadow: var(--shadow-lg)
-- Transform: translateY(-2px)
-- Transition: all 250ms
-
-/* Glass Card (for overlays) */
-- Background: rgba(255, 255, 255, 0.05)
-- Backdrop Filter: blur(10px)
-- Border: 1px solid rgba(255, 255, 255, 0.1)
-```
+### Cards & Panels
+- 배경: `--color-bg-secondary`, 보더: `--color-border-primary`.
+- Padding: 최소 `var(--space-6)`.
+- Hover 시 `transform: translateY(-2px)` + `--shadow-md`.
+- 그래프 카드에는 `--gradient-overlay`를 사용해 데이터 시선을 모은다.
 
 ### Inputs
-
-```tsx
-/* Text Input */
-- Height: 40px (md), 36px (sm), 44px (lg)
-- Background: var(--color-bg-tertiary)
-- Border: 1px solid var(--color-border-primary)
-- Border Radius: var(--radius-input)
-- Padding: 0 var(--space-4)
-- Font Size: var(--text-sm)
-- Focus: border color → primary, shadow glow
-
-/* Label */
-- Font Size: var(--text-sm)
-- Font Weight: var(--font-medium)
-- Margin Bottom: var(--space-2)
-- Color: var(--color-text-secondary)
-
-/* Error State */
-- Border: var(--color-danger-500)
-- Error Text: var(--text-xs), var(--color-danger-500)
-```
+- 높이: 40px (md), 44px (lg), 36px (sm).
+- 배경: `--color-bg-tertiary`, 포커스 시 border → `--color-primary-700`, glow 적용.
+- 라벨: Roboto Mono 라벨, Inter 서브카피.
 
 ### Tables
+- Head: Britti Sans 600, `text-transform: uppercase`, 배경 `--color-bg-tertiary`.
+- Body: Roboto Mono for numbers, Inter for labels.
+- Hover: `background-color: rgba(255, 255, 255, 0.03)`.
 
-```tsx
-/* Table Header */
-- Background: var(--color-bg-tertiary)
-- Font Size: var(--text-xs)
-- Font Weight: var(--font-semibold)
-- Text Transform: uppercase
-- Letter Spacing: 0.05em
-- Color: var(--color-text-secondary)
-- Padding: var(--space-3) var(--space-4)
+### Badges & Status Chips
+- 컬러 매핑: success/danger/warning/info + secondary palette.
+- Typography: Roboto Mono uppercase.
+- Padding: `var(--space-1) var(--space-3)`.
 
-/* Table Row */
-- Border Bottom: 1px solid var(--color-border-primary)
-- Hover: var(--color-bg-tertiary)
-- Padding: var(--space-4)
-
-/* Table Cell (Numbers) */
-- Font Family: var(--font-mono)
-- Text Align: right (for numbers)
-- Font Variant Numeric: tabular-nums
-```
-
-### Badges
-
-```tsx
-/* Status Badge */
-- Padding: var(--space-1) var(--space-3)
-- Border Radius: var(--radius-badge)
-- Font Size: var(--text-xs)
-- Font Weight: var(--font-semibold)
-
-/* Success Badge (Price Up) */
-- Background: rgba(34, 197, 94, 0.1)
-- Color: var(--color-success-500)
-
-/* Danger Badge (Price Down) */
-- Background: rgba(239, 68, 68, 0.1)
-- Color: var(--color-danger-500)
-```
-
-### Tooltips
-
-```tsx
-- Background: var(--color-bg-elevated)
-- Border: 1px solid var(--color-border-secondary)
-- Border Radius: var(--radius-md)
-- Padding: var(--space-2) var(--space-3)
-- Font Size: var(--text-sm)
-- Shadow: var(--shadow-lg)
-- Max Width: 200px
-- Animation: fade in 150ms
-```
+### Tooltips & Popovers
+- 배경 `--color-bg-elevated`, border `--color-border-secondary`, shadow `--shadow-lg`.
+- 화살표는 `linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))` 사용.
 
 ### Modals
-
-```tsx
-/* Overlay */
-- Background: rgba(0, 0, 0, 0.7)
-- Backdrop Filter: blur(4px)
-
-/* Modal Container */
-- Background: var(--color-bg-elevated)
-- Border: 1px solid var(--color-border-secondary)
-- Border Radius: var(--radius-modal)
-- Shadow: var(--shadow-2xl)
-- Max Width: 600px (md), 800px (lg), 400px (sm)
-- Padding: var(--space-8)
-- Animation: scale in + fade in
-```
-
----
-
-## Layout
-
-### Container
-
-```css
---container-xs: 640px
---container-sm: 768px
---container-md: 1024px
---container-lg: 1280px
---container-xl: 1536px
-```
-
-### Grid
-
-```css
-/* Standard Grid */
-- Gap: var(--space-6)
-- Columns: 12 (desktop), 4 (mobile)
-- Max Width: var(--container-xl)
-- Padding: var(--space-6) (mobile), var(--space-8) (desktop)
-```
-
-### Breakpoints
-
-```css
---breakpoint-sm: 640px
---breakpoint-md: 768px
---breakpoint-lg: 1024px
---breakpoint-xl: 1280px
---breakpoint-2xl: 1536px
-```
+- overlay `rgba(0, 0, 0, 0.7)` + blur(6px).
+- 내부 배경 `--color-bg-elevated`, Padding `var(--space-8)`.
+- Show/hide는 scale + opacity + glow 동시 적용.
 
 ---
 
 ## Data Visualization
 
-### Price Display
+- 메인 라인/영역 그래프: `--color-primary-700` + gradient.
+- WebSocket 이벤트/노드 상태: secondary 팔레트 순환 (Cyan → Icy → Magenta → Amber).
+- 상승/하강 지표는 success/danger 팔레트를 그대로 사용한다.
+- 3D 시각화 노드:
+  - Leader: `#6E54FF` + halo glow
+  - Active Validator: `#85E6FF`
+  - Idle: `#71717a`
+  - Failed: `#ef4444` + pulsating halo
 
+### Price Card Example
 ```tsx
-/* Price Up */
-- Color: var(--color-success-500)
-- Icon: ▲ or ↑
-- Font: var(--font-mono)
-
-/* Price Down */
-- Color: var(--color-danger-500)
-- Icon: ▼ or ↓
-- Font: var(--font-mono)
-
-/* Percentage Change */
-- Font Size: var(--text-sm)
-- Background: rgba(color, 0.1)
-- Padding: var(--space-1) var(--space-2)
-- Border Radius: var(--radius-sm)
-```
-
-### Charts
-
-```tsx
-/* TradingView Chart Theme */
-- Background: var(--color-bg-primary)
-- Grid Lines: var(--color-border-primary)
-- Text: var(--color-text-secondary)
-- Candle Up: var(--color-success-500)
-- Candle Down: var(--color-danger-500)
-- Volume Bars: 40% opacity of candle color
-
-/* Line Chart */
-- Line Width: 2px
-- Line Color: var(--color-primary-500)
-- Area Fill: gradient (primary, 0.2 opacity → 0)
-- Tooltip: var(--color-bg-elevated), shadow-lg
-```
-
----
-
-## Icons
-
-### Library
-- **Lucide React** (recommended): `npm install lucide-react`
-- **Heroicons**: Alternative option
-
-### Sizes
-
-```css
---icon-xs: 12px
---icon-sm: 16px
---icon-md: 20px
---icon-lg: 24px
---icon-xl: 32px
-```
-
-### Usage
-
-```tsx
-<Icon
-  size={20}
-  strokeWidth={2}
-  color="currentColor"
-/>
-```
-
----
-
-## Accessibility
-
-### Contrast Ratios
-- Normal Text: 4.5:1 minimum
-- Large Text: 3:1 minimum
-- UI Components: 3:1 minimum
-
-### Focus States
-- Outline: 2px solid var(--color-primary-500)
-- Outline Offset: 2px
-- Border Radius: inherit from component
-
-### ARIA Labels
-- Always include for icon-only buttons
-- Use semantic HTML when possible
-- Provide alt text for images
-
-### Keyboard Navigation
-- Tab order: logical flow
-- Enter/Space: activate buttons
-- Escape: close modals/dropdowns
-- Arrow keys: navigate lists/menus
-
----
-
-## Dark/Light Mode Toggle
-
-```tsx
-/* Implementation */
-- Use CSS variables for all colors
-- Toggle class on <html>: 'dark' / 'light'
-- Persist preference in localStorage
-- System preference detection: prefers-color-scheme
-
-/* Transition */
-transition: background-color 200ms, color 200ms, border-color 200ms;
-```
-
----
-
-## Mobile Considerations
-
-### Touch Targets
-- Minimum: 44px × 44px
-- Recommended: 48px × 48px
-
-### Typography
-- Increase base font size on mobile: 16px (prevents zoom)
-- Adjust line height for readability
-
-### Spacing
-- Increase padding/margin on mobile
-- Reduce data density for better usability
-
-### Navigation
-- Bottom tab bar for primary navigation
-- Hamburger menu for secondary items
-
----
-
-## Performance
-
-### Image Optimization
-- Use Next.js Image component
-- WebP format with fallback
-- Lazy loading for below-fold images
-- Responsive images (srcset)
-
-### Font Loading
-- Font Display: swap
-- Preload critical fonts
-- Subset fonts (Latin only if applicable)
-
-### CSS
-- Critical CSS inline
-- Non-critical CSS deferred
-- Minimize unused CSS (Tailwind purge)
-
----
-
-## Examples
-
-### Price Card Component
-
-```tsx
-<Card>
-  <div className="flex items-center justify-between">
-    <div>
-      <Label>BTC/USD</Label>
-      <div className="text-3xl font-mono font-semibold">
-        $42,358.21
-      </div>
-    </div>
-    <Badge variant="success">
-      ▲ 2.34%
-    </Badge>
+<Card className="space-y-4">
+  <span className="text-label text-secondary">BTC / USD</span>
+  <div className="flex items-end gap-4">
+    <span className="text-display-hero text-primary-foreground">$42,358.21</span>
+    <Badge variant="success">▲ 2.34%</Badge>
   </div>
+  <small className="text-body text-muted">Updated 2s ago</small>
 </Card>
 ```
 
-### Data Table Row
+---
 
-```tsx
-<tr className="border-b border-border-primary hover:bg-bg-tertiary transition-colors">
-  <td className="py-3 px-4">BTC</td>
-  <td className="py-3 px-4 text-right font-mono">$42,358.21</td>
-  <td className="py-3 px-4 text-right font-mono text-success-500">
-    +2.34%
-  </td>
-</tr>
-```
+## Accessibility & Performance Guardrails
+- 텍스트 대비: 최소 4.5:1, Britti Sans 사용 시 굵기 600 이상을 유지한다.
+- 포커스 링: 2px `#85E6FF`, offset 2px, radius inherit.
+- 모션 최소화 옵션 (`prefers-reduced-motion`) 시 particle, halo, auto-rotation 모두 비활성화.
+- 모든 실시간 데이터 컴포넌트는 16ms 이하 업데이트 루프를 준수한다.
 
 ---
 
-## Resources
-
-### Inspiration
-- Binance
-- Coinbase Pro
-- Upbit
-- TradingView
-- Stripe Dashboard
-- Vercel Dashboard
-
-### Tools
-- Figma (design mockups)
-- Tailwind CSS Playground
-- Coolors (color palettes)
-- Type Scale (typography)
-
----
-
-## Notes for AI Agents
-
-1. **Always use design tokens**: Never hardcode colors/spacing
-2. **Dark mode first**: Design for dark theme, then adapt to light
-3. **Semantic HTML**: Use proper tags (button, nav, main, etc.)
-4. **Consistent spacing**: Stick to 4px grid system
-5. **Accessibility**: Always include ARIA labels, proper contrast
-6. **Performance**: Lazy load images, optimize animations
-7. **Mobile responsive**: Test on all breakpoints
-8. **Brand consistency**: Use primary colors sparingly for emphasis
-9. **Data clarity**: Use monospace font for numbers, tabular-nums
-10. **Visual hierarchy**: Clear heading structure, proper spacing
-
----
-
-## Version
-
-- Version: 1.0.0
-- Last Updated: 2025-01-24
-- Next Review: When adding new components or major features
+## Versioning
+- Version: 2.0.0
+- Palette Revision: Britti Sans Era (2025-02-02)
+- 담당: Frontend/Design Systems
+- 다음 점검: 신규 시각화 컴포넌트 도입 시

@@ -85,6 +85,7 @@
   - Blockchain data fetching
   - Real-time price updates
   - Transaction status queries
+  - Historical log snapshots (persisted in browser cache for offline playback)
 - **Installation**: `npm install @tanstack/react-query`
 
 ---

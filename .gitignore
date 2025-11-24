@@ -34,3 +34,5 @@ go.work.sum
 # bpf2go eBPF object file
 *.o
 perf.*
+
+.DS_Store
