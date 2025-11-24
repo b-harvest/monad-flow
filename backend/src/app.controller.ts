@@ -63,7 +63,7 @@ export class AppController {
       websocketPayload = summary;
     }
     this.websocketHandler.sendToClient(
-      WebsocketEvent.OUTBOUND_ROUTER_EVENT,
+      WebsocketEvent.OUTBOUND_ROUTER,
       websocketPayload,
     );
 
