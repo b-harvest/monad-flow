@@ -12,10 +12,10 @@ export class OutboundRouterMessage extends Document {
   @Prop({ type: Object })
   data?: any;
 
-  @Prop({ required: false, index: true })
+  @Prop({ required: false })
   appMessageHash?: string;
 
-  @Prop({ default: Date.now })
+  @Prop({ default: Date.now, index: true })
   timestamp: Date;
 }
 

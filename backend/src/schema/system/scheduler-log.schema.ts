@@ -12,13 +12,13 @@ export class SchedulerLog extends Document {
   /**
    * 모니터링 타겟의 메인 PID
    */
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   main_pid: string;
 
   /**
    * 스레드 ID
    */
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   tid: string;
 
   /**

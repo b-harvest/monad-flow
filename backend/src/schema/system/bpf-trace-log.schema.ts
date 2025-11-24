@@ -22,6 +22,12 @@ export class BpfTraceLog extends Document {
   pid: string;
 
   /**
+   * 로그가 발생한 실제 시간 (이벤트 시간)
+   */
+  @Prop({ required: true, index: true })
+  timestamp: Date;
+
+  /**
    * exit일 때만 존재
    */
   @Prop()
@@ -29,7 +35,7 @@ export class BpfTraceLog extends Document {
 
   /**
    * EnterData 또는 ExitData
-   * Timestamp / Caller / Args / BackToName / ReturnValue 등이 포함됨
+   * Caller / Args / BackToName / ReturnValue 등이 포함됨
    */
   @Prop({ type: MongooseSchema.Types.Mixed, required: true })
   data: any;

@@ -45,7 +45,7 @@ export class WebSocketHandler
   @SubscribeMessage(WebsocketEvent.MONAD_CHUNK_EVENT)
   async handleUDP(@MessageBody() data: any) {
     const doc = await this.appService.createFromUDP(data);
-    this.sendToClient(WebsocketEvent.CLIENT_EVENT, doc);
+    this.sendToClient(WebsocketEvent.MONAD_CHUNK_EVENT, doc);
   }
 
   @SubscribeMessage(WebsocketEvent.BPF_TRACE)

@@ -58,13 +58,13 @@ export class MonadChunkPacket extends Document {
   @Prop({ required: true })
   reserved: number;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   chunkId: number;
 
-  @Prop({ type: String, index: true, sparse: true })
+  @Prop({ type: String, sparse: true })
   combinedMessageId?: string;
 
-  @Prop({ default: Date.now })
+  @Prop({ default: Date.now, index: true })
   timestamp: Date;
 }
 

@@ -36,7 +36,7 @@ export class PerfStatLog extends Document {
   /**
    * 모니터링 대상 PID
    */
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   pid: string;
 
   /**

@@ -18,13 +18,13 @@ export class OffCpuLog extends Document {
   /**
    * 프로세스 ID
    */
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   pid: string;
 
   /**
    * 스레드 ID
    */
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   tid: string;
 
   /**

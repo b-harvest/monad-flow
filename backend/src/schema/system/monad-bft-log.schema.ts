@@ -8,7 +8,7 @@ export class MonadBftLog extends Document {
    * (예: "monad-bft.service")
    * (_SYSTEMD_UNIT 필드)
    */
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   unit: string;
 
   /**

@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { OutboundRouterMessage } from './schema/network/outbound-router-message.schema';
@@ -40,16 +45,58 @@ export class AppService {
 
   async getAll(): Promise<void> {}
 
+  async getAppMessage(id: string): Promise<any> {
+    const message = await this.outboundRouterModel.findById(id).lean().exec();
+    if (!message) {
+      throw new NotFoundException(`Message with ID ${id} not found`);
+    }
+    return message;
+  }
+
+  async getLogsByTimeRange(from: Date, to: Date, type: string): Promise<any> {
+    const query = {
+      timestamp: { $gte: from, $lte: to },
+    };
+
+    switch (type) {
+      case 'chunk':
+        return this.chunkModel.find(query).lean().exec();
+      case 'router':
+        return this.outboundRouterModel.find(query).lean().exec();
+
+      case 'offcpu':
+        return this.offCpuModel.find(query).lean().exec();
+      case 'scheduler':
+        return this.schedulerModel.find(query).lean().exec();
+      case 'perf':
+        return this.perfStatModel.find(query).lean().exec();
+      case 'turbo':
+        return this.turboStatModel.find(query).lean().exec();
+      case 'bpf':
+        return this.bpfTraceModel.find(query).lean().exec();
+      case 'bft':
+        return this.bftLogModel.find(query).lean().exec();
+      case 'exec':
+        return this.execLogModel.find(query).lean().exec();
+
+      default:
+        throw new BadRequestException(
+          `Invalid log type: ${type}. Available types: chunk, router, offcpu, scheduler, perf, turbo, bpf, bft, exec`,
+        );
+    }
+  }
+
   async createFromUDP(payload: {
     type: NetworkEventType;
     data: any;
     timestamp: number;
+    appMessageHash?: string;
   }): Promise<any> {
-    const { type, data, timestamp } = payload;
+    const { type, data, timestamp, appMessageHash } = payload;
     if (type === NetworkEvent.MONAD_CHUNK) {
       return this.handleMonadChunkPacket(data, timestamp);
     } else if (type === NetworkEvent.OUTBOUND_ROUTER) {
-      return this.handleOutboundRouter(data, timestamp);
+      return this.handleOutboundRouter(data, timestamp, appMessageHash);
     } else {
       this.logger.log(
         `Received UDP event:\n${JSON.stringify(payload, null, 2)}`,
@@ -205,6 +252,7 @@ export class AppService {
   private async handleOutboundRouter(
     data: any,
     timestamp: number,
+    appMessageHash?: string,
   ): Promise<OutboundRouterMessage> {
     const jsonString = JSON.stringify(data);
     const sizeBytes = Buffer.byteLength(jsonString);
@@ -223,7 +271,7 @@ export class AppService {
       messageType: data.messageType,
       data:
         data.peerDiscovery || data.fullNodesGroup || data.appMessage || null,
-      appMessageHash: data.appMessageHash,
+      appMessageHash: appMessageHash,
       timestamp: new Date(timestamp / 1000),
     });
     return doc.save();
