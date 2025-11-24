@@ -8,19 +8,39 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
-	"system/hook"
+
 	"system/journalctl"
 	"system/kernel"
 	"system/perf"
 	"system/scheduler"
 	"system/turbostat"
 
+	"system/hook"
+
 	"github.com/joho/godotenv"
 	"github.com/zishang520/socket.io/clients/socket/v3"
 )
+
+var hookTargets = []string{
+	"_ZN5monad10BlockState6commitERKN4evmc7bytes32ERKNS_11BlockHeaderERKSt6vectorINS_7ReceiptESaIS9_EERKS8_IS8_INS_9CallFrameESaISE_EESaISG_EERKS8_INS1_7addressESaISL_EERKS8_INS_11TransactionESaISQ_EERKS8_IS5_SaIS5_EERKSt8optionalIS8_INS_10WithdrawalESaIS10_EEE",
+	// "_ZNK5monad3mpt2Db4findERKNS0_14NodeCursorBaseINS0_4NodeEEENS0_11NibblesViewEm",
+	// "_ZNK5monad3mpt2Db4findENS0_11NibblesViewEm",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision0EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision1EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision2EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision3EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision4EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision5EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision6EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision7EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision8EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+	"_ZN5monad13execute_blockINS_11MonadTraitsIL14monad_revision9EEEEEN5boost10outcome_v212basic_resultISt6vectorINS_7ReceiptESaIS8_EEN13system_error219errored_status_codeINSB_6detail6erasedIlEEEENS5_12experimental6policy17status_code_throwISA_SG_vEEEERKNS_5ChainERKNS_5BlockESt4spanIKN4evmc7addressELm18446744073709551615EESS_IKS7_ISt8optionalISU_ESaISY_EELm18446744073709551615EERNS_10BlockStateERKNS_15BlockHashBufferERNS_5fiber10FiberGroupERNS_12BlockMetricsESS_ISt10unique_ptrINS_14CallTracerBaseESt14default_deleteIS1E_EELm18446744073709551615EESS_IS1D_ISt7variantIJSt9monostateNS_5trace14PrestateTracerENS1L_15StateDiffTracerENS1L_16AccessListTracerEEES1F_IS1P_EELm18446744073709551615EERKSt8functionIFbRSV_RKNS_11TransactionEmRNS_5StateEEE",
+
+}
 
 type DataPacket struct {
 	Source string      `json:"source"`
@@ -52,24 +72,14 @@ func main() {
 			log.Printf("[Main] Error extracting PIDs from services: %v", err)
 		}
 	}
-
 	targetPIDs = uniqueStrings(targetPIDs)
 
-	// tracePid := os.Getenv("TARGET_TRACE_PID")
-	// binaryPath := os.Getenv("TARGET_TRACE_BINARY")
-	rawOffsets := os.Getenv("TARGET_TRACE_OFFSETS")
-	var hookTargets []hook.HookTarget
-	if rawOffsets != "" {
-		pairs := strings.Split(rawOffsets, ",")
-		for _, pair := range pairs {
-			parts := strings.Split(pair, ":")
-			if len(parts) == 2 {
-				hookTargets = append(hookTargets, hook.HookTarget{
-					Name:   strings.TrimSpace(parts[0]),
-					Offset: strings.TrimSpace(parts[1]),
-				})
-			}
-		}
+	tracePidStr := os.Getenv("TARGET_TRACE_PID")
+	tracePid := 0
+	if tracePidStr != "" {
+		tracePid, _ = strconv.Atoi(tracePidStr)
+	} else if len(targetPIDs) > 0 {
+		tracePid, _ = strconv.Atoi(targetPIDs[0])
 	}
 
 	socketURL := os.Getenv("BACKEND_URL")
@@ -80,13 +90,10 @@ func main() {
 	fmt.Println("==========================================")
 	fmt.Println("All-in-One System Monitor Starting...")
 	fmt.Printf("Target Services: %v\n", targetServices)
-	fmt.Printf("Resolved PIDs:   %v\n", targetPIDs) // 추출된 PID 확인
+	fmt.Printf("Resolved PIDs:   %v\n", targetPIDs)
+	fmt.Printf("Hook TargetPID:  %d\n", tracePid) // Hook 대상 확인
 	fmt.Printf("Socket Server:   %s\n", socketURL)
 	fmt.Println("==========================================")
-
-	if len(targetPIDs) == 0 {
-		log.Println("[Main] Warning: No active PIDs found from services. Process monitoring will be skipped.")
-	}
 
 	mainDataChan := make(chan DataPacket, 1000)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -112,18 +119,21 @@ func main() {
 
 		wg.Add(1)
 		go perf.Start(ctx, &wg, perfChan, perf.Config{TargetPID: pid})
-
-		fmt.Printf("[Main] Launched monitors for PID: %s\n", pid)
 	}
 
-	// hookChan := make(chan hook.TraceLog, 100)
-	// wg.Add(1)
-	// go hook.Start(ctx, &wg, hookChan, hook.Config{
-	// 	TargetPID:  tracePid,
-	// 	BinaryPath: binaryPath,
-	// 	Targets:    hookTargets,
-	// })
-	// go bridge(ctx, hookChan, mainDataChan, "BPF_TRACE")
+	if tracePid > 0 {
+		hookChan := make(chan hook.TraceLog, 100)
+		wg.Add(1)
+		
+		go hook.Start(ctx, &wg, hookChan, hook.Config{
+			TargetPID: tracePid,
+			Targets:   hookTargets,
+		})
+		
+		go bridge(ctx, hookChan, mainDataChan, "BPF_TRACE")
+	} else {
+		log.Println("[Main] Skipping Hook Tracer (No valid PID)")
+	}
 
 	journalChan := make(chan journalctl.LogEntry, 100)
 	wg.Add(1)

@@ -6,12 +6,14 @@ toolchain go1.24.10
 
 require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+	github.com/frida/frida-go v0.2.2-0.20221123160525-1a7ab3721ef9
 	github.com/joho/godotenv v1.5.1
 	github.com/zishang520/socket.io/clients/socket/v3 v3.0.0-rc.8
 )
 
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gookit/color v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect

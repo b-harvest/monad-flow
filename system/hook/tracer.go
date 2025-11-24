@@ -1,29 +1,25 @@
-package main
+package hook
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/signal"
-	"strconv"
+	"log"
 	"strings"
-	"syscall"
+	"sync"
 
 	"github.com/frida/frida-go/frida"
 )
 
-// --- [Frida 메시지 껍데기 구조체] ---
-type FridaEnvelope struct {
-	Type    string          `json:"type"`    // "send" 또는 "error"
-	Payload json.RawMessage `json:"payload"` // 실제 우리가 보낸 데이터
+type Config struct {
+	TargetPID int
+	Targets   []string // 후킹할 함수 목록
 }
 
-// --- [사용자 정의 데이터 구조체] ---
 type TraceLog struct {
-	EventType  string          `json:"event_type"`
+	EventType  string          `json:"event_type"` // "enter" | "exit"
 	FuncName   string          `json:"func_name"`
 	PID        string          `json:"pid"`
-	TID        string          `json:"tid"`
 	DurationNs string          `json:"duration_ns,omitempty"`
 	Data       json.RawMessage `json:"data"`
 }
@@ -40,85 +36,77 @@ type ExitData struct {
 	ReturnValue    string `json:"return_value"`
 }
 
-var targetFunctions = []string{
-	"_ZN5monad10BlockState6commitERKN4evmc7bytes32ERKNS_11BlockHeaderERKSt6vectorINS_7ReceiptESaIS9_EERKS8_IS8_INS_9CallFrameESaISE_EESaISG_EERKS8_INS1_7addressESaISL_EERKS8_INS_11TransactionESaISQ_EERKS8_IS5_SaIS5_EERKSt8optionalIS8_INS_10WithdrawalESaIS10_EEE",
+type fridaEnvelope struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: sudo ./hooker <PID>")
-		os.Exit(1)
+func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg Config) {
+	defer wg.Done()
+
+	if cfg.TargetPID <= 0 {
+		log.Println("[Hook] Invalid PID, skipping hooker.")
+		return
 	}
-	pid, _ := strconv.Atoi(os.Args[1])
 
 	manager := frida.NewDeviceManager()
-	devices, _ := manager.EnumerateDevices()
+	devices, err := manager.EnumerateDevices()
+	if err != nil || len(devices) == 0 {
+		log.Printf("[Hook] Failed to enumerate devices: %v", err)
+		return
+	}
 	localDevice := devices[0]
 
-	fmt.Printf("[*] Attaching to PID: %d ...\n", pid)
-	session, err := localDevice.Attach(pid, nil)
+	log.Printf("[Hook] Attaching to PID: %d ...", cfg.TargetPID)
+	session, err := localDevice.Attach(cfg.TargetPID, nil)
 	if err != nil {
-		panic(err)
+		log.Printf("[Hook] Failed to attach: %v", err)
+		return
 	}
-	defer session.Detach()
+	
+	defer func() {
+		session.Detach()
+		log.Println("[Hook] Detached from process.")
+	}()
 
-	jsCode := generateJSPayload(targetFunctions)
-	script, _ := session.CreateScript(jsCode)
+	jsCode := generateJSPayload(cfg.Targets)
+	script, err := session.CreateScript(jsCode)
+	if err != nil {
+		log.Printf("[Hook] Failed to create script: %v", err)
+		return
+	}
 
-	// --- [메시지 핸들러 수정됨] ---
 	script.On("message", func(message string) {
-		// 1. 먼저 껍데기(Envelope)를 깝니다.
-		var envelope FridaEnvelope
+		var envelope fridaEnvelope
 		if err := json.Unmarshal([]byte(message), &envelope); err != nil {
-			// JSON 형식이 아니면 그냥 출력
-			fmt.Printf("[Raw] %s\n", message)
 			return
 		}
 
-		// 2. 메시지 타입이 'send'인 경우만 처리
 		if envelope.Type == "send" {
 			var logEntry TraceLog
-			// Payload를 다시 파싱합니다.
 			if err := json.Unmarshal(envelope.Payload, &logEntry); err != nil {
-				fmt.Printf("[Error Parsing Payload] %s\n", string(envelope.Payload))
 				return
 			}
 
-			// 3. 로그 출력 로직
-			fmt.Println("---------------------------------------------------")
-			fmt.Printf("[%s] Func: %s (TID: %s)\n", strings.ToUpper(logEntry.EventType), shortenName(logEntry.FuncName), logEntry.TID)
-
-			if logEntry.EventType == "enter" {
-				var d EnterData
-				json.Unmarshal(logEntry.Data, &d)
-				fmt.Printf("   ↳ Caller: %s\n", shortenName(d.CallerFuncName))
-				fmt.Printf("   ↳ Args:   %v\n", d.Args)
-				fmt.Printf("   ↳ Time:   %s\n", d.Timestamp)
-			} else if logEntry.EventType == "exit" {
-				var d ExitData
-				json.Unmarshal(logEntry.Data, &d)
-				fmt.Printf("   ↳ Return: %s\n", d.ReturnValue)
-				fmt.Printf("   ↳ Dur:    %s ns\n", logEntry.DurationNs)
+			if len(logEntry.FuncName) > 70 {
+				logEntry.FuncName = logEntry.FuncName[:67] + "..."
 			}
-		} else if envelope.Type == "error" {
-			// JS 실행 중 에러 발생 시
-			fmt.Printf("[Frida JS Error] %s\n", string(envelope.Payload))
+			
+			select {
+			case outChan <- logEntry:
+			case <-ctx.Done():
+			}
 		}
 	})
 
-	script.Load()
-	fmt.Println("[*] Hooks installed. Press Ctrl+C to stop.")
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-}
-
-func shortenName(fullName string) string {
-	if len(fullName) > 60 {
-		return fullName[:25] + "..." + fullName[len(fullName)-25:]
+	if err := script.Load(); err != nil {
+		log.Printf("[Hook] Failed to load script: %v", err)
+		return
 	}
-	return fullName
+
+	log.Println("[Hook] Scripts loaded. Monitoring started.")
+
+	<-ctx.Done()
 }
 
 func generateJSPayload(symbols []string) string {
@@ -129,66 +117,92 @@ func generateJSPayload(symbols []string) string {
 	jsArrayStr := strings.Join(quotedSymbols, ", ")
 
 	return fmt.Sprintf(`
-		const targetSymbols = [%s];
-		const pid = Process.id.toString();
+        const targetSymbols = [%s];
+        const pid = Process.id.toString();
 
-		function hookFunction(symbolName) {
-			let targetAddr = DebugSymbol.getFunctionByName(symbolName);
-			if (!targetAddr) targetAddr = Module.findExportByName(null, symbolName);
-			if (!targetAddr) { 
-                // 에러도 send로 보내서 Go에서 찍히게 함
-                send({event_type: "error", msg: "Cannot find symbol: " + symbolName});
-                return; 
-            }
+        let clock_gettime_addr = Module.findExportByName(null, 'clock_gettime');
+        if (!clock_gettime_addr) clock_gettime_addr = Module.findExportByName("libc.so.6", "clock_gettime");
+        
+        let clock_gettime = null;
+        if (clock_gettime_addr) {
+            clock_gettime = new NativeFunction(clock_gettime_addr, 'int', ['int', 'pointer']);
+        }
 
-			Interceptor.attach(targetAddr, {
-				onEnter: function(args) {
-					this.tid = Process.getCurrentThreadId().toString();
-					this.startTime = new Date(); 
-					const tsString = this.startTime.toISOString();
+        const CLOCK_MONOTONIC = 1;
+        const timespecSize = 16;
 
-					let callerSym = DebugSymbol.fromAddress(this.returnAddress);
-					let callerName = callerSym.name ? callerSym.name : this.returnAddress.toString();
+        function hookFunction(symbolName) {
+            let targetAddr = DebugSymbol.getFunctionByName(symbolName);
+            if (!targetAddr) targetAddr = Module.findExportByName(null, symbolName);
+            if (!targetAddr) return; 
 
-					let argsList = [];
-					for (let i = 0; i < 5; i++) {
-						try { argsList.push(args[i].toString()); } catch (e) { argsList.push("0x0"); }
-					}
+            Interceptor.attach(targetAddr, {
+                onEnter: function(args) {
+                    if (clock_gettime) {
+                        this.startTs = Memory.alloc(timespecSize);
+                        clock_gettime(CLOCK_MONOTONIC, this.startTs);
+                    } else {
+                        this.startTimeDate = new Date();
+                    }
 
-					send({
-						event_type: "enter",
-						func_name: symbolName,
-						pid: pid,
-						tid: this.tid,
-						duration_ns: "0",
-						data: {
-							timestamp: tsString,
-							caller_name: callerName,
-							args_hex: argsList
-						}
-					});
-				},
+                    let callerSym = DebugSymbol.fromAddress(this.returnAddress);
+                    let callerName = callerSym.name ? callerSym.name : this.returnAddress.toString();
 
-				onLeave: function(retval) {
-					const endTime = new Date();
-					const durationMs = endTime.getTime() - this.startTime.getTime();
-					const durationNs = (durationMs * 1000000).toString();
+                    let argsList = [];
+                    for (let i = 0; i < 5; i++) {
+                        try { argsList.push(args[i].toString()); } catch (e) { argsList.push("0x0"); }
+                    }
 
-					send({
-						event_type: "exit",
-						func_name: symbolName,
-						pid: pid,
-						tid: this.tid,
-						duration_ns: durationNs,
-						data: {
-							timestamp: endTime.toISOString(),
-							back_to_name: "caller", 
-							return_value: retval.toString()
-						}
-					});
-				}
-			});
-		}
-		targetSymbols.forEach(hookFunction);
-	`, jsArrayStr)
+                    send({
+                        event_type: "enter",
+                        func_name: symbolName,
+                        pid: pid,
+                        duration_ns: "0",
+                        data: {
+                            timestamp: new Date().toISOString(),
+                            caller_name: callerName,
+                            args_hex: argsList
+                        }
+                    });
+                },
+
+                onLeave: function(retval) {
+                    let durationBn = "0";
+
+                    if (clock_gettime && this.startTs) {
+                        const endTs = Memory.alloc(timespecSize);
+                        clock_gettime(CLOCK_MONOTONIC, endTs);
+                        
+                        const startSec = BigInt(this.startTs.readU64().toString());
+                        const startNsec = BigInt(this.startTs.add(8).readU64().toString());
+                        
+                        const endSec = BigInt(endTs.readU64().toString());
+                        const endNsec = BigInt(endTs.add(8).readU64().toString());
+
+                        const billion = BigInt(1000000000);
+                        const startTotal = (startSec * billion) + startNsec;
+                        const endTotal = (endSec * billion) + endNsec;
+                        
+                        durationBn = (endTotal - startTotal).toString();
+
+                    } else if (this.startTimeDate) {
+                        durationBn = ((new Date().getTime() - this.startTimeDate.getTime()) * 1000000).toString();
+                    }
+
+                    send({
+                        event_type: "exit",
+                        func_name: symbolName,
+                        pid: pid,
+                        duration_ns: durationBn,
+                        data: {
+                            timestamp: new Date().toISOString(),
+                            back_to_name: "caller", 
+                            return_value: retval.toString()
+                        }
+                    });
+                }
+            });
+        }
+        targetSymbols.forEach(hookFunction);
+    `, jsArrayStr)
 }
