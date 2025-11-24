@@ -9,7 +9,7 @@ import { AppController } from './app.controller';
   imports: [
     ModelModule,
     MongooseModule.forRoot(
-      'mongodb://root:bharvest_password!@localhost:27017/bharvest?authSource=admin',
+      `mongodb://${process.env.MONGO_ROOT_USERNAME}:${process.env.MONGO_ROOT_PASSWORD}@localhost:27017/${process.env.MONGO_DATABASE}?authSource=admin`,
     ),
   ],
   controllers: [AppController],
