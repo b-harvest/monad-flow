@@ -46,6 +46,9 @@ export class BpfTraceLog extends Document {
   @Prop({ required: true })
   timestamp: Date;
 
+  @Prop({ required: true })
+  func_name: string;
+
   /**
    * 프로세스 ID
    */

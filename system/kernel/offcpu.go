@@ -21,6 +21,7 @@ type Config struct {
 type OffCPUData struct {
 	Timestamp   string   `json:"timestamp"`    // 수집 시각
 	ProcessName string   `json:"process_name"` // 프로세스 이름
+	PID 		string 	 `json:"pid"`		   // 프로세스 ID
 	TID         string   `json:"tid"`          // Thread ID
 	DurationUs  int      `json:"duration_us"`  // 대기 시간 (마이크로초)
 	Stack       []string `json:"stack"`        // 스택 트레이스
@@ -63,7 +64,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- OffCPUData, c
 			}
 
 			nowStr := time.Now().Format("2006-01-02 15:04:05.000000")
-			results := parseOutput(string(output), reProcess, nowStr)
+			results := parseOutput(string(output), reProcess, nowStr, cfg.TargetPID)
 			for _, data := range results {
 				select {
 				case outChan <- data:
@@ -76,7 +77,7 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- OffCPUData, c
 	}
 }
 
-func parseOutput(output string, reProcess *regexp.Regexp, timestamp string) []OffCPUData {
+func parseOutput(output string, reProcess *regexp.Regexp, timestamp string, pid string) []OffCPUData {
 	var results []OffCPUData
 	scanner := bufio.NewScanner(strings.NewReader(output))
 
@@ -102,6 +103,7 @@ func parseOutput(output string, reProcess *regexp.Regexp, timestamp string) []Of
 						results = append(results, OffCPUData{
 							Timestamp:   timestamp,
 							ProcessName: procName,
+							PID:		 pid,
 							TID:         tid,
 							DurationUs:  duration,
 							Stack:       append([]string{}, currentStack...),
