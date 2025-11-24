@@ -20,18 +20,17 @@ type TraceLog struct {
 	EventType  string          `json:"event_type"` // "enter" | "exit"
 	FuncName   string          `json:"func_name"`
 	PID        string          `json:"pid"`
+	Timestamp  string          `json:"timestamp"` // 여기로 이동
 	DurationNs string          `json:"duration_ns,omitempty"`
 	Data       json.RawMessage `json:"data"`
 }
 
 type EnterData struct {
-	Timestamp      string   `json:"timestamp"`
 	CallerFuncName string   `json:"caller_name"`
 	Args           []string `json:"args_hex"`
 }
 
 type ExitData struct {
-	Timestamp      string `json:"timestamp"`
 	BackToFuncName string `json:"back_to_name"`
 	ReturnValue    string `json:"return_value"`
 }
@@ -91,7 +90,6 @@ func Start(ctx context.Context, wg *sync.WaitGroup, outChan chan<- TraceLog, cfg
 			if len(logEntry.FuncName) > 70 {
 				logEntry.FuncName = logEntry.FuncName[:67] + "..."
 			}
-			
 			select {
 			case outChan <- logEntry:
 			case <-ctx.Done():
@@ -157,9 +155,9 @@ func generateJSPayload(symbols []string) string {
                         event_type: "enter",
                         func_name: symbolName,
                         pid: pid,
+                        timestamp: new Date().toISOString(), 
                         duration_ns: "0",
                         data: {
-                            timestamp: new Date().toISOString(),
                             caller_name: callerName,
                             args_hex: argsList
                         }
@@ -193,9 +191,9 @@ func generateJSPayload(symbols []string) string {
                         event_type: "exit",
                         func_name: symbolName,
                         pid: pid,
+                        timestamp: new Date().toISOString(),
                         duration_ns: durationBn,
                         data: {
-                            timestamp: new Date().toISOString(),
                             back_to_name: "caller", 
                             return_value: retval.toString()
                         }
