@@ -52,7 +52,7 @@ Visualizes leader proposals traveling to validators.
 - **Color**: Leader purple.
 - **Width**: 0.05 units; fades to zero alpha near receiver.
 - **Lifetime**: 1.5 s with ease-out fade.
-- **Trigger**: `ProtocolMessage` where `messageType === 1 (Proposal)` from `/api/outbound-message` or `MONAD_CHUNK_EVENT`.
+- **Trigger**: `ProtocolMessage` where `messageType === 1 (Proposal)` from `/api/outbound-message` or `MONAD_CHUNK`.
 
 #### 2.2 Vote Ripple
 Validators replying with votes produce expanding rings.

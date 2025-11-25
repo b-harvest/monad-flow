@@ -665,6 +665,58 @@ a {
   max-height: inherit;
 }
 
+.socket-live-panel {
+  position: fixed;
+  left: var(--space-4);
+  top: 120px;
+  bottom: var(--space-4);
+  width: min(560px, 80vw);
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-secondary);
+  background: rgba(14, 11, 24, 0.95);
+}
+
+.socket-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: clamp(220px, 32vw, 320px) 1fr;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .socket-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.socket-card {
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: rgba(10, 8, 20, 0.8);
+  min-height: 0;
+}
+
+.socket-card textarea {
+  height: 100%;
+  min-height: 0;
+  resize: vertical;
+}
+
+.socket-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
 .command-nav {
   display: flex;
   align-items: center;
@@ -739,4 +791,97 @@ a {
 
 .status-live-text {
   color: var(--color-text-primary);
+}
+.debug-drawer {
+  position: fixed;
+  right: var(--space-4);
+  top: 120px;
+  bottom: var(--space-4);
+  width: min(560px, 80vw);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-secondary);
+  background: rgba(14, 11, 26, 0.96);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.debug-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.debug-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.debug-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.debug-list {
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.debug-detail {
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: rgba(10, 8, 20, 0.85);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.debug-json {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-faint);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.debug-json pre {
+  margin: 0;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+}
+
+.debug-issues {
+  border: 1px solid var(--color-border-warning, #f59e0b);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.debug-issues ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--color-warning-500, #f59e0b);
+  font-size: 0.9rem;
+}
+.router-panel-placeholder {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
 }

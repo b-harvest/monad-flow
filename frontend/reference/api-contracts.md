@@ -103,7 +103,7 @@ Query persisted monitoring logs within a time range. Historical playback (Forens
 
 **Path Params**
 - `type` (string): Log bucket to query. Supported string literals:
-  - `chunk`: UDP chunk captures (MONAD_CHUNK_EVENT)
+  - `chunk`: UDP chunk captures (MONAD_CHUNK)
   - `router`: Outbound router events
   - `offcpu`: Off-CPU traces
   - `scheduler`: Scheduler stats
@@ -122,7 +122,7 @@ Query persisted monitoring logs within a time range. Historical playback (Forens
 [
   {
     "_id": "675f4f0a3b8e9d0012c9f111",
-    "eventType": "MONAD_CHUNK_EVENT",
+    "eventType": "MONAD_CHUNK",
     "timestamp": "2024-11-24T12:00:00.123Z",   // ISO string
     "timestampMs": "1732468800123",            // where original payload includes it
     "payload": { /* identical to the WebSocket event payload */ }
@@ -612,7 +612,7 @@ interface OutboundRouterEvent {
 }
 ```
 
-### Event: `MONAD_CHUNK_EVENT`
+### Event: `MONAD_CHUNK`
 
 UDP packet capture of Monad chunk packets.
 
@@ -928,7 +928,7 @@ interface TurboStatEvent {
 
 All WebSocket events follow the enum definitions in `backend/src/common/enum-definition.ts`:
 
-- `MONAD_CHUNK_EVENT`: Network packet capture
+- `MONAD_CHUNK`: Network packet capture
 - `CLIENT_EVENT`: Broadcast to frontend clients
 - `BPF_TRACE`: Function hooking traces
 - `SYSTEM_LOG`: Systemd journal logs

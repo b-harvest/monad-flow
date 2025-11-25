@@ -133,3 +133,9 @@ export interface OutboundRouterEventSummary {
   status: "delivered" | "pending" | "blocked";
   detail: string;
 }
+
+export interface SocketEventRecord {
+  event: string;
+  payload: string;
+  timestamp: number;
+}

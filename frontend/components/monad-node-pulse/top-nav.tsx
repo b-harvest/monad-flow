@@ -5,9 +5,20 @@ import Image from "next/image";
 interface CommandNavProps {
   streamOpen: boolean;
   onToggleStream: () => void;
+  debugOpen: boolean;
+  onToggleDebug: () => void;
+  socketOpen: boolean;
+  onToggleSocket: () => void;
 }
 
-export function CommandNav({ streamOpen, onToggleStream }: CommandNavProps) {
+export function CommandNav({
+  streamOpen,
+  onToggleStream,
+  debugOpen,
+  onToggleDebug,
+  socketOpen,
+  onToggleSocket,
+}: CommandNavProps) {
   return (
     <nav className="command-nav glass-card">
       <div className="command-brand">
@@ -31,6 +42,22 @@ export function CommandNav({ streamOpen, onToggleStream }: CommandNavProps) {
           aria-pressed={streamOpen}
         >
           Socket Stream
+        </button>
+        <button
+          type="button"
+          className={`status-toggle ${debugOpen ? "active" : ""}`}
+          onClick={onToggleDebug}
+          aria-pressed={debugOpen}
+        >
+          DTO Inspector
+        </button>
+        <button
+          type="button"
+          className={`status-toggle ${socketOpen ? "active" : ""}`}
+          onClick={onToggleSocket}
+          aria-pressed={socketOpen}
+        >
+          Socket Live
         </button>
       </div>
     </nav>

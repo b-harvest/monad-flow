@@ -11,10 +11,29 @@ import { AlertToast } from "./status/alert-toast";
 import { NodeTelemetryPanel } from "./panels/node-telemetry-panel";
 import { EventLogPanel } from "./panels/event-log-panel";
 import { CommandNav } from "./top-nav";
+import { OutboundRouterDebugger } from "../debug/outbound-router-debugger";
+import { SocketLivePanel } from "../debug/socket-live-panel";
+import "@/lib/storage/bpf-trace-cache";
+import { useBpfTraceStream } from "@/lib/socket/use-bpf-trace-stream";
+import { useSystemLogStream } from "@/lib/socket/use-system-log-stream";
+import { usePerfStatStream } from "@/lib/socket/use-perf-stat-stream";
+import { useOffCpuStream } from "@/lib/socket/use-off-cpu-stream";
+import { useSchedulerStream } from "@/lib/socket/use-scheduler-stream";
+import { useTurboStatStream } from "@/lib/socket/use-turbo-stat-stream";
+import { useMonadChunkStream } from "@/lib/socket/use-monad-chunk-stream";
 
 const MonadNodePulse = () => {
   useMockPulseStream();
+  useBpfTraceStream();
+  useSystemLogStream();
+  useOffCpuStream();
+  usePerfStatStream();
+  useSchedulerStream();
+  useTurboStatStream();
+  useMonadChunkStream();
   const [socketPanelOpen, setSocketPanelOpen] = useState(false);
+  const [routerDebugOpen, setRouterDebugOpen] = useState(false);
+  const [socketDebugOpen, setSocketDebugOpen] = useState(false);
   const metrics = useNodePulseStore((state) => state.metrics);
   const nodes = useNodePulseStore((state) => state.nodes);
   const eventLog = useNodePulseStore((state) => state.eventLog);
@@ -31,6 +50,10 @@ const MonadNodePulse = () => {
       <CommandNav
         streamOpen={socketPanelOpen}
         onToggleStream={() => setSocketPanelOpen((prev) => !prev)}
+        debugOpen={routerDebugOpen}
+        onToggleDebug={() => setRouterDebugOpen((prev) => !prev)}
+        socketOpen={socketDebugOpen}
+        onToggleSocket={() => setSocketDebugOpen((prev) => !prev)}
       />
       <div className="node-pulse-layout">
         <section className="node-pulse-stage">
@@ -58,6 +81,11 @@ const MonadNodePulse = () => {
           <EventLogPanel events={eventLog} />
         </div>
       ) : null}
+      <OutboundRouterDebugger
+        open={routerDebugOpen}
+        onClose={() => setRouterDebugOpen(false)}
+      />
+      <SocketLivePanel open={socketDebugOpen} onClose={() => setSocketDebugOpen(false)} />
     </div>
   );
 };
