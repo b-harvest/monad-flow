@@ -55,7 +55,8 @@ export class AppController {
     },
     @Res() response: Response,
   ) {
-    const result = await this.appService.createFromUDP(body);
+    const createdDoc = await this.appService.createFromUDP(body);
+    const result = createdDoc.toObject ? createdDoc.toObject() : createdDoc;
 
     let websocketPayload = result;
     if (result.messageType === 1) {
