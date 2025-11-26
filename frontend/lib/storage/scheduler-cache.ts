@@ -12,6 +12,7 @@ const EventArraySchema = z.array(
     _id: z.string(),
     timestamp: z.string(),
     main_pid: z.string(),
+    pid: z.string().optional(),
     tid: z.string(),
     thread_name: z.string(),
     wait_delta_ms: z.number(),
@@ -20,6 +21,8 @@ const EventArraySchema = z.array(
     __v: z.number().optional(),
   }),
 );
+type Listener = () => void;
+const listeners = new Set<Listener>();
 
 let hydratedBuffer: SchedulerEvent[] = [];
 let isHydrated = false;
@@ -51,6 +54,13 @@ function persistBuffer(next: SchedulerEvent[]) {
       console.warn("[SCHEDULER] Failed to persist cache:", error);
     }
   }
+  listeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.warn("[SCHEDULER] Listener error:", error);
+    }
+  });
 }
 
 export function getSchedulerEvents() {
@@ -71,4 +81,11 @@ export function appendSchedulerEvent(payload: unknown) {
 
 export function clearSchedulerEvents() {
   persistBuffer([]);
+}
+
+export function subscribeToSchedulerEvents(listener: Listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

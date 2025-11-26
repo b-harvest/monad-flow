@@ -1,53 +1,58 @@
 import { z } from "zod";
 
-const NetworkMessageVersionSchema = z.object({
+const TimestampSchema = z.union([z.string(), z.number(), z.date()]);
+const MessageTypeSchema = z
+  .union([z.number(), z.string()])
+  .transform((value) => {
+    if (typeof value === "number") {
+      return value;
+    }
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  });
+
+const CamelCaseNetworkVersionSchema = z.object({
   serializeVersion: z.number(),
   compressionVersion: z.number(),
 });
 
-const PeerDiscoveryMessageSchema = z.object({
-  version: z.number(),
-  type: z.number(),
-  payload: z.record(z.any()).optional(),
+const PascalCaseNetworkVersionSchema = z.object({
+  SerializeVersion: z.number(),
+  CompressionVersion: z.number(),
 });
 
-const FullNodesGroupMessageSchema = z.object({
-  version: z.number(),
-  type: z.number(),
-  payload: z.record(z.any()).optional(),
-});
+export type NetworkMessageVersion = z.infer<
+  typeof CamelCaseNetworkVersionSchema
+>;
 
-const MonadVersionSchema = z.object({
-  protocolVersion: z.number(),
-  clientVersionMajor: z.number(),
-  clientVersionMinor: z.number(),
-  hashVersion: z.number(),
-  serializeVersion: z.number(),
-});
+export const NetworkMessageVersionSchema = z
+  .union([CamelCaseNetworkVersionSchema, PascalCaseNetworkVersionSchema])
+  .transform((value): NetworkMessageVersion => ({
+    serializeVersion:
+      "serializeVersion" in value
+        ? value.serializeVersion
+        : value.SerializeVersion,
+    compressionVersion:
+      "compressionVersion" in value
+        ? value.compressionVersion
+        : value.CompressionVersion,
+  }));
 
-const MonadMessageSchema = z.object({
-  version: MonadVersionSchema,
-  typeId: z.number(),
-  payload: z.record(z.any()),
-});
+export const OutboundRouterEventSchema = z
+  .object({
+    _id: z.string(),
+    __v: z.number().optional(),
+    type: z.string().optional(),
+    version: NetworkMessageVersionSchema,
+    messageType: MessageTypeSchema,
+    data: z.unknown().optional(),
+    appMessageHash: z.string().optional(),
+    timestamp: TimestampSchema,
+  })
+  .passthrough();
 
-const OutboundRouterCombinedSchema = z.object({
-  version: NetworkMessageVersionSchema,
-  messageType: z.number(),
-  peerDiscovery: PeerDiscoveryMessageSchema.optional(),
-  fullNodesGroup: FullNodesGroupMessageSchema.optional(),
-  appMessage: MonadMessageSchema.optional(),
-});
-
-const RouterLogEntrySchema = z.object({
-  _id: z.string(),
-  type: z.string(),
-  appMessageHash: z.string().optional(),
-  data: OutboundRouterCombinedSchema.optional(),
-  timestamp: z.union([z.string(), z.number()]),
-});
-
-export type RouterLogEntry = z.infer<typeof RouterLogEntrySchema>;
+export type OutboundRouterEvent = z.infer<typeof OutboundRouterEventSchema>;
+export type RouterLogEntry = OutboundRouterEvent;
 
 export interface FetchRouterLogsOptions {
   from?: string;
@@ -83,7 +88,7 @@ export async function fetchRouterLogs(
   const parsed: RouterLogEntry[] = [];
   const issues: string[] = [];
   json.forEach((entry, index) => {
-    const result = RouterLogEntrySchema.safeParse(entry);
+    const result = OutboundRouterEventSchema.safeParse(entry);
     if (result.success) {
       parsed.push(result.data);
     } else {
@@ -96,4 +101,26 @@ export async function fetchRouterLogs(
   });
 
   return { entries: parsed, issues };
+}
+
+export async function fetchOutboundAppMessage(
+  id: string,
+): Promise<OutboundRouterEvent> {
+  if (!id) {
+    throw new Error("App message ID is required");
+  }
+  const response = await fetch(`${API_BASE}/api/app-message/${id}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch app message (${response.status})`);
+  }
+  const json = await response.json();
+  const result = OutboundRouterEventSchema.safeParse(json);
+  if (!result.success) {
+    throw new Error(
+      `Invalid app message payload: ${result.error.issues
+        .map((issue) => issue.message)
+        .join(", ")}`,
+    );
+  }
+  return result.data;
 }

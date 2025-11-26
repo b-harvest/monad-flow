@@ -18,6 +18,9 @@ const EventArraySchema = z.array(
   }),
 );
 
+type Listener = () => void;
+const listeners = new Set<Listener>();
+
 let hydratedBuffer: SystemLogEvent[] = [];
 let isHydrated = false;
 
@@ -48,6 +51,13 @@ function persistBuffer(next: SystemLogEvent[]) {
       console.warn("[SYSTEM_LOG] Failed to persist cache:", error);
     }
   }
+  listeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.warn("[SYSTEM_LOG] subscriber failed", error);
+    }
+  });
 }
 
 export function getSystemLogEvents() {
@@ -68,4 +78,11 @@ export function appendSystemLogEvent(payload: unknown) {
 
 export function clearSystemLogEvents() {
   persistBuffer([]);
+}
+
+export function subscribeToSystemLogEvents(listener: Listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

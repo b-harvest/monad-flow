@@ -10,6 +10,8 @@ const STORAGE_KEY = "monad-flow:bpf-trace";
 export const MAX_BPF_TRACE_ENTRIES = 500;
 
 const EventArraySchema = z.array(BpfTraceEventSchema);
+type Listener = () => void;
+const listeners = new Set<Listener>();
 
 let hydratedBuffer: BpfTraceEvent[] = [];
 let isHydrated = false;
@@ -47,6 +49,13 @@ function persistBuffer(next: BpfTraceEvent[]) {
       console.warn("[MonadFlow] Failed to persist BPF trace cache:", error);
     }
   }
+  listeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.warn("[MonadFlow] BPF listener error", error);
+    }
+  });
 }
 
 export function getBpfTraceEvents(): BpfTraceEvent[] {
@@ -69,4 +78,11 @@ export function appendBpfTraceEvent(payload: unknown) {
 
 export function clearBpfTraceEvents() {
   persistBuffer([]);
+}
+
+export function subscribeToBpfTraceEvents(listener: Listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

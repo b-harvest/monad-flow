@@ -8,6 +8,8 @@ const STORAGE_KEY = "monad-flow:turbo-stat";
 export const MAX_TURBO_STAT_ENTRIES = 120;
 
 const EventArraySchema = z.array(TurboStatEventSchema);
+type Listener = () => void;
+const listeners = new Set<Listener>();
 
 let hydratedBuffer: TurboStatEvent[] = [];
 let isHydrated = false;
@@ -39,6 +41,13 @@ function persistBuffer(next: TurboStatEvent[]) {
       console.warn("[TURBO_STAT] Failed to persist cache:", error);
     }
   }
+  listeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.warn("[TURBO_STAT] Listener error:", error);
+    }
+  });
 }
 
 export function getTurboStatEvents() {
@@ -59,4 +68,11 @@ export function appendTurboStatEvent(payload: unknown) {
 
 export function clearTurboStatEvents() {
   persistBuffer([]);
+}
+
+export function subscribeToTurboStatEvents(listener: Listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

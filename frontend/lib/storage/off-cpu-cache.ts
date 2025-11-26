@@ -5,7 +5,7 @@ import type { OffCpuEvent } from "@/lib/api/off-cpu";
 import { OffCpuParser } from "@/lib/api/off-cpu";
 
 const STORAGE_KEY = "monad-flow:off-cpu";
-export const MAX_OFF_CPU_ENTRIES = 100;
+export const MAX_OFF_CPU_ENTRIES = 30;
 
 const EventArraySchema = z.array(
   z.object({
@@ -19,6 +19,8 @@ const EventArraySchema = z.array(
     __v: z.number().optional(),
   }),
 );
+type Listener = () => void;
+const listeners = new Set<Listener>();
 
 let hydratedBuffer: OffCpuEvent[] = [];
 let isHydrated = false;
@@ -50,6 +52,13 @@ function persistBuffer(next: OffCpuEvent[]) {
       console.warn("[OFF_CPU] Failed to persist cache:", error);
     }
   }
+  listeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.warn("[OFF_CPU] Listener error:", error);
+    }
+  });
 }
 
 export function getOffCpuEvents() {
@@ -70,4 +79,11 @@ export function appendOffCpuEvent(payload: unknown) {
 
 export function clearOffCpuEvents() {
   persistBuffer([]);
+}
+
+export function subscribeToOffCpuEvents(listener: Listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { io, Socket } from "socket.io-client";
 import { appendBpfTraceEvent } from "@/lib/storage/bpf-trace-cache";
 import { defaultSocketEndpoint } from "./config";
+import { acquireSocket, releaseSocket } from "./shared-socket";
 
 const EVENT_NAME = "BPF_TRACE";
 
@@ -18,9 +18,7 @@ export function useBpfTraceStream(options?: { endpoint?: string }) {
       return;
     }
 
-    const socket: Socket = io(endpoint, {
-      transports: ["websocket", "polling"],
-    });
+    const socket = acquireSocket(endpoint);
 
     const handlePayload = (payload: unknown) => {
       try {
@@ -34,7 +32,7 @@ export function useBpfTraceStream(options?: { endpoint?: string }) {
 
     return () => {
       socket.off(EVENT_NAME, handlePayload);
-      socket.disconnect();
+      releaseSocket();
     };
   }, [endpoint]);
 }

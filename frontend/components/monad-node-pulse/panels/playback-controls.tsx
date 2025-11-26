@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { PlaybackState } from "@/types/monad";
 
@@ -14,6 +15,9 @@ export function PlaybackControls({
   playback,
   onChange,
 }: PlaybackControlsProps) {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+
   const { mode, cursor, range, speed, isPlaying } = playback;
   const rangeDuration = range.to - range.from;
   const cursorRatio =
@@ -43,7 +47,7 @@ export function PlaybackControls({
       </header>
 
       <div className="timeline">
-        <span>{new Date(range.from).toLocaleTimeString()}</span>
+        <span>{hydrated ? new Date(range.from).toLocaleTimeString() : "—"}</span>
         <input
           type="range"
           min={0}
@@ -53,7 +57,7 @@ export function PlaybackControls({
             handleScrub(Number(event.target.value) / 1000)
           }
         />
-        <span>{new Date(range.to).toLocaleTimeString()}</span>
+        <span>{hydrated ? new Date(range.to).toLocaleTimeString() : "—"}</span>
       </div>
 
       <div className="speed-controls">

@@ -25,6 +25,8 @@ const EventArraySchema = z.array(
     __v: z.number().optional(),
   }),
 );
+type Listener = () => void;
+const listeners = new Set<Listener>();
 
 let hydratedBuffer: PerfStatEvent[] = [];
 let isHydrated = false;
@@ -56,6 +58,13 @@ function persistBuffer(next: PerfStatEvent[]) {
       console.warn("[PERF_STAT] Failed to persist cache:", error);
     }
   }
+  listeners.forEach((listener) => {
+    try {
+      listener();
+    } catch (error) {
+      console.warn("[PERF_STAT] Listener error:", error);
+    }
+  });
 }
 
 export function getPerfStatEvents() {
@@ -76,4 +85,11 @@ export function appendPerfStatEvent(payload: unknown) {
 
 export function clearPerfStatEvents() {
   persistBuffer([]);
+}
+
+export function subscribeToPerfStatEvents(listener: Listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }

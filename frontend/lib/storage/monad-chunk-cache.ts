@@ -8,7 +8,7 @@ import {
 } from "@/lib/api/monad-chunk";
 
 const STORAGE_KEY = "monad-flow:monad-chunk";
-export const MAX_MONAD_CHUNK_ENTRIES = 80;
+export const MAX_MONAD_CHUNK_ENTRIES = 1000;
 
 const EventArraySchema = z.array(MonadChunkEventSchema);
 

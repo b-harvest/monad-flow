@@ -15,6 +15,8 @@ export interface MonadNode {
   cluster?: RaptorGroup;
   parentId?: string | null;
   isLocal?: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface BpfTraceSample {
@@ -92,7 +94,7 @@ export interface MonitoringEvent {
   severity: MonitoringSeverity;
 }
 
-export type PulseVisualType = "proposal" | "vote" | "pulse";
+export type PulseVisualType = "proposal" | "vote" | "pulse" | "chunk";
 
 export interface PulseVisualEffect {
   id: string;
@@ -101,6 +103,7 @@ export interface PulseVisualEffect {
   toNodeId?: string;
   createdAt: number;
   ttl: number;
+  direction?: "inbound" | "outbound";
 }
 
 export interface PlaybackState {
@@ -138,4 +141,17 @@ export interface SocketEventRecord {
   event: string;
   payload: string;
   timestamp: number;
+}
+
+export interface ChunkPacketRecord {
+  id: string;
+  appMessageHash?: string;
+  chunkId: number;
+  timestamp: number;
+  fromIp: string;
+  fromPort: number;
+  toIp: string;
+  toPort: number;
+  size: number;
+  payload: unknown;
 }

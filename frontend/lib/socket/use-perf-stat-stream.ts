@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { io, Socket } from "socket.io-client";
 import { defaultSocketEndpoint } from "./config";
 import { appendPerfStatEvent } from "@/lib/storage/perf-stat-cache";
+import { acquireSocket, releaseSocket } from "./shared-socket";
 
 const EVENT_NAME = "PERF_STAT";
 
@@ -14,9 +14,7 @@ export function usePerfStatStream(options?: { endpoint?: string }) {
     if (!endpoint) {
       return;
     }
-    const socket: Socket = io(endpoint, {
-      transports: ["websocket", "polling"],
-    });
+    const socket = acquireSocket(endpoint);
 
     const handlePayload = (payload: unknown) => {
       try {
@@ -30,7 +28,7 @@ export function usePerfStatStream(options?: { endpoint?: string }) {
 
     return () => {
       socket.off(EVENT_NAME, handlePayload);
-      socket.disconnect();
+      releaseSocket();
     };
   }, [endpoint]);
 }

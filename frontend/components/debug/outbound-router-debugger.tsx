@@ -124,7 +124,7 @@ export function OutboundRouterDebugger({
               >
                 <p className="router-row-label">
                   {formatTimestamp(entry.timestamp)} · msgType{" "}
-                  {entry.data?.messageType ?? "?"}
+                  {entry.messageType ?? "?"}
                 </p>
               </button>
             ))
@@ -145,7 +145,7 @@ export function OutboundRouterDebugger({
                 />
                 <DetailItem
                   label="Message Type"
-                  value={String(selectedEntry.data?.messageType ?? "—")}
+                  value={String(selectedEntry.messageType ?? "—")}
                 />
                 <DetailItem
                   label="App Hash"

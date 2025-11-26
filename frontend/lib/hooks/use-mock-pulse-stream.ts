@@ -112,138 +112,60 @@ function createTelemetrySnapshot(node: MonadNode): NodeTelemetryDigest {
   };
 }
 
+const ENABLE_MOCK =
+  typeof process !== "undefined" &&
+  process.env.NEXT_PUBLIC_USE_MOCK === "true";
+
 export function useMockPulseStream() {
   useEffect(() => {
-    const proposalInterval = setInterval(() => {
-      const state = useNodePulseStore.getState();
-      const leader = state.nodes.find((node) => node.role === "leader");
-      const validators = state.nodes.filter((node) => node.id !== leader?.id);
-      if (!leader || validators.length === 0) {
-        return;
-      }
+    if (!ENABLE_MOCK) {
+      return undefined;
+    }
+    const state = useNodePulseStore.getState();
+    state.setConnectionStatus("connected");
+    const localId = state.ensureLocalNode();
 
-      const target =
-        validators[Math.floor(Math.random() * validators.length)];
-      const now = Date.now();
-      state.addEffect({
-        id: `proposal-${now}`,
-        type: "proposal",
-        fromNodeId: leader.id,
-        toNodeId: target.id,
-        createdAt: now,
-        ttl: 1600,
+    const chunkInterval = setInterval(() => {
+      const current = useNodePulseStore.getState();
+      const ip = `${Math.floor(Math.random() * 200) + 20}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
+      const port = 3000 + Math.floor(Math.random() * 2000);
+      const peerId = current.upsertChunkPeer(ip, port);
+      current.addEffect({
+        id: `mock-chunk-${Date.now()}`,
+        type: "chunk",
+        fromNodeId: peerId,
+        toNodeId: localId,
+        createdAt: Date.now(),
+        ttl: 1500,
       });
-      state.pushEvent({
+      const severity =
+        severityPalette[Math.floor(Math.random() * severityPalette.length)];
+      current.pushEvent({
         id: createId(),
-        timestamp: now,
-        nodeId: leader.id,
-        label: `Proposal • Round ${state.metrics.round + 1}`,
-        detail: `${leader.name} broadcasting payload to ${target.name}`,
-        severity: "info",
+        timestamp: Date.now(),
+        nodeId: peerId,
+        label: "Chunk Received",
+        detail: `${ip}:${port} relayed packet to Monad Validator`,
+        severity,
       });
-
-      setTimeout(() => {
-        const current = useNodePulseStore.getState();
-        current.addEffect({
-          id: `vote-${Date.now()}`,
-          type: "vote",
-          fromNodeId: target.id,
-          createdAt: Date.now(),
-          ttl: 1000,
-        });
-        const voteEvent: MonitoringEvent = {
-          id: createId(),
-          timestamp: Date.now(),
-          nodeId: target.id,
-          label: "Vote Received",
-          detail: `${target.name} acknowledged round ${current.metrics.round + 1}`,
-          severity:
-            severityPalette[
-              Math.floor(Math.random() * severityPalette.length)
-            ],
-        };
-        current.pushEvent(voteEvent);
-      }, randomBetween(350, 600));
     }, 2600);
 
     const metricsInterval = setInterval(() => {
-      const state = useNodePulseStore.getState();
-      state.setMetrics({
-        round: state.metrics.round + 1,
+      const current = useNodePulseStore.getState();
+      current.setMetrics({
+        round: current.metrics.round + 1,
         tps: Math.max(
           750,
-          Math.min(1800, state.metrics.tps + randomBetween(-120, 120)),
+          Math.min(1800, current.metrics.tps + randomBetween(-120, 120)),
         ),
-        blockHeight: state.metrics.blockHeight + 1,
+        blockHeight: current.metrics.blockHeight + 1,
         avgBlockTime: Math.max(0.85, randomBetween(0.95, 1.25)),
         networkHealth: Math.max(
           70,
-          Math.min(100, state.metrics.networkHealth + randomBetween(-2, 3)),
+          Math.min(100, current.metrics.networkHealth + randomBetween(-2, 3)),
         ),
       });
     }, 4300);
-
-    const failureInterval = setInterval(() => {
-      if (Math.random() > 0.4) {
-        return;
-      }
-      const state = useNodePulseStore.getState();
-      const leader = state.nodes.find((node) => node.role === "leader");
-      const validators = state.nodes.filter((node) => node.id !== leader?.id);
-      if (!leader || validators.length === 0) {
-        return;
-      }
-
-      state.setNodeState(leader.id, "failed");
-      const failureTimestamp = Date.now();
-      state.addEffect({
-        id: `failure-${failureTimestamp}`,
-        type: "pulse",
-        fromNodeId: leader.id,
-        createdAt: failureTimestamp,
-        ttl: 3200,
-      });
-      state.pushEvent({
-        id: createId(),
-        timestamp: failureTimestamp,
-        nodeId: leader.id,
-        label: "Leader Failure",
-        detail: `${leader.name} timed out – recovery initiated`,
-        severity: "critical",
-      });
-      state.setAlert({
-        id: createId(),
-        title: "Leader Failure Detected",
-        description: `Round ${state.metrics.round} stalled on ${leader.name}. Launching recovery.`,
-        severity: "critical",
-        createdAt: failureTimestamp,
-      });
-
-      setTimeout(() => {
-        const nextState = useNodePulseStore.getState();
-        const newLeader =
-          validators[Math.floor(Math.random() * validators.length)];
-        nextState.rotateLeader(newLeader.id);
-        nextState.setNodeState(leader.id, "active");
-        nextState.setNodeState(newLeader.id, "leader");
-        const recoveryEvent: MonitoringEvent = {
-          id: createId(),
-          timestamp: Date.now(),
-          nodeId: newLeader.id,
-          label: "Leader Switchover",
-          detail: `${newLeader.name} promoted – consensus resumed`,
-          severity: "info",
-        };
-        nextState.pushEvent(recoveryEvent);
-        nextState.setAlert({
-          id: createId(),
-          title: "New Leader Elected",
-          description: `${newLeader.name} is stabilizing round ${nextState.metrics.round + 1}.`,
-          severity: "info",
-          createdAt: Date.now(),
-        });
-      }, 4200);
-    }, 22000);
 
     const cleanupInterval = setInterval(
       () => useNodePulseStore.getState().pruneEffects(),
@@ -277,9 +199,8 @@ export function useMockPulseStream() {
     }, 3800);
 
     return () => {
-      clearInterval(proposalInterval);
+      clearInterval(chunkInterval);
       clearInterval(metricsInterval);
-      clearInterval(failureInterval);
       clearInterval(cleanupInterval);
       clearInterval(telemetryInterval);
       clearInterval(routerInterval);

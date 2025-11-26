@@ -4,6 +4,7 @@ export const SchedulerEventSchema = z.object({
   _id: z.string(),
   timestamp: z.string(),
   main_pid: z.string(),
+  pid: z.string().optional(),
   tid: z.string(),
   thread_name: z.string(),
   wait_delta_ms: z.number(),
