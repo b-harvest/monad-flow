@@ -139,6 +139,10 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.text-placeholder {
+  color: var(--color-text-tertiary);
+}
+
 .glass-card {
   background: linear-gradient(
       135deg,
@@ -247,7 +251,7 @@ a {
 
 .node-pulse-stage-grid {
   display: grid;
-  grid-template-columns: minmax(min(560px, 100%), 720px) minmax(0, 1fr);
+  grid-template-columns: minmax(min(500px, 100%), 650px) minmax(0, 1fr);
   gap: var(--space-4);
   width: 100%;
   height: 100%;
@@ -1701,7 +1705,7 @@ a {
 
 .chunk-detail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.55fr) minmax(0, 0.45fr);
   gap: var(--space-4);
   min-height: 0;
   flex: 1;
@@ -1747,6 +1751,7 @@ a {
   height: 100%;
   display: flex;
   flex-direction: column;
+  max-width: none;
 }
 
 .chunk-packet-stack {

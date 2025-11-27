@@ -259,7 +259,7 @@ export function ChunkQueueDetailPanel() {
                 >
                   <div className="router-list-meta">
                     <span>{formatTimestamp(event.timestamp)}</span>
-                    <span>type {event.messageType}</span>
+                    <span>{describeRouterEvent(event)}</span>
                   </div>
                   <span className="router-hash">
                     {formatHash(event.appMessageHash ?? "unmapped")}
@@ -423,4 +423,81 @@ function normalizeRouterPayload(
     ...rest,
     data: overrideData ?? event.data,
   };
+}
+
+function describeRouterEvent(event: OutboundRouterEvent) {
+  const data = event.data as Record<string, any> | undefined | null;
+  if (event.messageType === 1) {
+    const typeId = getTypeId(data);
+    if (typeId === 1) {
+      const consensusLabel = getConsensusLabel(data);
+      if (consensusLabel) {
+        return `AppMessage - Consensus - ${consensusLabel}`;
+      }
+      return "AppMessage - Consensus";
+    }
+    if (typeId === 2) return "AppMessage - BlockSyncRequest";
+    if (typeId === 3) return "AppMessage - BlockSyncResponse";
+    if (typeId === 4) return "AppMessage - ForwardedTxs";
+    if (typeId === 5) return "AppMessage - StateSync";
+    return "AppMessage";
+  }
+  if (event.messageType === 2) {
+    const type = getTypeId(data);
+    const peerLabels: Record<number, string> = {
+      1: "PeerDiscovery - Ping",
+      2: "PeerDiscovery - Pong",
+      3: "PeerDiscovery - PeerLookupRequest",
+      4: "PeerDiscovery - PeerLookupResponse",
+      5: "PeerDiscovery - FullnodeRaptorcastReq",
+      6: "PeerDiscovery - FullnodeRaptorcastResp",
+    };
+    if (type && peerLabels[type]) {
+      return peerLabels[type];
+    }
+    return "PeerDiscovery";
+  }
+  if (event.messageType === 3) {
+    const type = getTypeId(data);
+    const groupLabels: Record<number, string> = {
+      1: "FullNodesGroup - PrepareRequest",
+      2: "FullNodesGroup - PrepareResponse",
+      3: "FullNodesGroup - ConfirmGroup",
+    };
+    if (type && groupLabels[type]) {
+      return groupLabels[type];
+    }
+    return "FullNodesGroup";
+  }
+  return `type ${event.messageType}`;
+}
+
+function getConsensusLabel(data: Record<string, any> | null | undefined) {
+  if (!data) return null;
+  const stageOne = data.payload;
+  const stageTwo = stageOne?.payload;
+  const messageType =
+    typeof stageTwo?.messageType === "number"
+      ? stageTwo.messageType
+      : Number(stageTwo?.messageType);
+  const labels: Record<number, string> = {
+    1: "Proposal",
+    2: "Vote",
+    3: "Timeout",
+    4: "RoundRecovery",
+    5: "NoEndorsement",
+    6: "AdvancedRound",
+  };
+  if (Number.isFinite(messageType) && labels[messageType]) {
+    return labels[messageType];
+  }
+  return null;
+}
+
+function getTypeId(value: Record<string, any> | undefined | null) {
+  if (!value) return null;
+  const raw = value.typeId ?? value.TypeID ?? value.type ?? value.Type;
+  if (raw === undefined) return null;
+  const num = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(num) ? num : null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { ConsensusMetrics, MonadNode } from "@/types/monad";
 import type { OutboundRouterEvent } from "@/lib/api/outbound-router";
 import {
@@ -17,11 +17,16 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 
 export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
   const leaderNode = nodes.find((node) => node.id === metrics.leaderId);
+  const [hydrated, setHydrated] = useState(false);
   const outboundEvents = useSyncExternalStore(
     subscribeToOutboundRouterEvents,
     getOutboundRouterEvents,
     getOutboundRouterEvents,
   );
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   const proposals = useMemo(() => {
     const normalized: ProposalSnapshot[] = [];
@@ -34,16 +39,15 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
     return normalized;
   }, [outboundEvents]);
 
-  const latestProposal = proposals[proposals.length - 1];
-  const previousProposal = proposals.length > 1 ? proposals[proposals.length - 2] : null;
+  const latestProposal =
+    hydrated && proposals.length > 0 ? proposals[proposals.length - 1] : null;
+  const previousProposal =
+    hydrated && proposals.length > 1 ? proposals[proposals.length - 2] : null;
 
-  const roundValue = latestProposal?.round ?? metrics.round;
-  const epochValue = latestProposal?.epoch ?? metrics.epoch;
-  const isProposalLeader = Boolean(latestProposal?.author);
-  const leaderValue =
-    latestProposal?.author ?? leaderNode?.name ?? "Unknown";
-  const leaderHelper = isProposalLeader ? undefined : leaderNode?.ip;
-  const blockHeightValue = latestProposal?.seqNum ?? metrics.blockHeight;
+  const roundValue = latestProposal ? latestProposal.round : null;
+  const epochValue = latestProposal ? latestProposal.epoch : null;
+  const leaderValue = latestProposal?.author ?? null;
+  const blockHeightValue = latestProposal ? latestProposal.seqNum : null;
 
   const blockDeltaNs =
     latestProposal && previousProposal
@@ -52,67 +56,77 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
   const blockDeltaSeconds =
     blockDeltaNs && blockDeltaNs > 0 ? blockDeltaNs / 1_000_000_000 : null;
   const avgBlockTimeValue =
-    typeof blockDeltaSeconds === "number"
-      ? blockDeltaSeconds
-      : metrics.avgBlockTime;
+    typeof blockDeltaSeconds === "number" ? blockDeltaSeconds : null;
   const txPerSecond =
     blockDeltaSeconds && blockDeltaSeconds > 0
       ? (latestProposal?.txCount ?? 0) / blockDeltaSeconds
       : null;
-  const tpsValue =
-    typeof txPerSecond === "number" ? txPerSecond : metrics.tps;
+  const tpsValue = typeof txPerSecond === "number" ? txPerSecond : null;
+  const hasProposalData = hydrated && latestProposal !== null;
 
   return (
     <section className="hud-panel metrics-panel">
       <div className="metrics-duo">
         <div className="metrics-duo-item">
           <span className="text-label">Round</span>
-          <p className="text-display-hero">
-            {numberFormatter.format(roundValue)}
-          </p>
+          {roundValue !== null ? (
+            <p className="text-display-hero">
+              {numberFormatter.format(roundValue)}
+            </p>
+          ) : (
+            <p className="text-display-hero text-placeholder">waiting…</p>
+          )}
         </div>
         <div className="metrics-duo-item">
           <span className="text-label">Epoch</span>
-          <p className="text-display-hero">
-            {numberFormatter.format(epochValue)}
-          </p>
+          {epochValue !== null ? (
+            <p className="text-display-hero">
+              {numberFormatter.format(epochValue)}
+            </p>
+          ) : (
+            <p className="text-display-hero text-placeholder">waiting…</p>
+          )}
         </div>
       </div>
 
       <div className="metrics-grid">
         <MetricItem
           label="Leader"
-          value={leaderValue}
-          helper={leaderHelper}
+          value={leaderValue ?? "waiting…"}
+          helper={undefined}
+          isPlaceholder={leaderValue === null}
         />
         <MetricItem
           label="TPS"
-          value={numberFormatter.format(Math.round(tpsValue))}
+          value={
+            typeof tpsValue === "number"
+              ? numberFormatter.format(Math.round(tpsValue))
+              : "waiting…"
+          }
           helper="avg"
+          isPlaceholder={typeof tpsValue !== "number"}
         />
         <MetricItem
           label="Block Height"
-          value={numberFormatter.format(blockHeightValue)}
+          value={
+            blockHeightValue !== null
+              ? numberFormatter.format(blockHeightValue)
+              : "waiting…"
+          }
+          isPlaceholder={blockHeightValue === null}
         />
         <MetricItem
           label="Avg Block Time"
-          value={`${avgBlockTimeValue.toFixed(2)}s`}
+          value={
+            typeof avgBlockTimeValue === "number"
+              ? `${avgBlockTimeValue.toFixed(2)}s`
+              : "waiting…"
+          }
           helper="sliding window"
+          isPlaceholder={typeof avgBlockTimeValue !== "number"}
         />
       </div>
 
-      <div className="metrics-health">
-        <div className="metrics-health-head">
-          <span className="text-label">Network Health</span>
-          <span className="text-number">{metrics.networkHealth}%</span>
-        </div>
-        <div className="health-bar">
-          <div
-            className="health-bar-fill"
-            style={{ width: `${metrics.networkHealth}%` }}
-          />
-        </div>
-      </div>
     </section>
   );
 }
@@ -188,6 +202,7 @@ interface MetricItemProps {
   value: string;
   helper?: string;
   variant?: "default" | "success" | "danger";
+  isPlaceholder?: boolean;
 }
 
 function MetricItem({
@@ -195,11 +210,16 @@ function MetricItem({
   value,
   helper,
   variant = "default",
+  isPlaceholder = false,
 }: MetricItemProps) {
   return (
     <div className={`metric-item ${variant}`}>
       <span className="text-label">{label}</span>
-      <span className={`text-number ${label === "Leader" ? "truncate" : ""}`}>
+      <span
+        className={`text-number ${label === "Leader" ? "truncate" : ""} ${
+          isPlaceholder ? "text-placeholder" : ""
+        }`}
+      >
         {label === "Leader" && value.length > 18
           ? `${value.slice(0, 15)}…`
           : value}
