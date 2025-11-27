@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Document, Model } from 'mongoose';
 import { OutboundRouterMessage } from './schema/network/outbound-router-message.schema';
 import { NetworkEvent } from './common/enum-definition';
 import { NetworkEventType } from './common/type-definition';
@@ -21,6 +21,12 @@ import { MonadBftLog } from './schema/system/monad-bft-log.schema';
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
+  private readonly batchSize =
+    Number(process.env.DB_BATCH_SIZE ?? 50) || 50;
+  private readonly batchIntervalMs =
+    Number(process.env.DB_BATCH_INTERVAL_MS ?? 1000) || 1000;
+  private readonly batchQueues = new Map<string, Document[]>();
+  private readonly batchTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     @InjectModel(MonadChunkPacket.name)
@@ -121,12 +127,14 @@ export class AppService {
 
     if (isBft) {
       const doc = new this.bftLogModel(payload);
-      return doc.save();
+      this.queueDocument(this.bftLogModel, doc);
+      return doc;
     }
 
     if (isExec) {
       const doc = new this.execLogModel(payload);
-      return doc.save();
+      this.queueDocument(this.execLogModel, doc);
+      return doc;
     }
 
     this.logger.warn(`[SYSTEM_LOG] Unknown unit=${unit}`);
@@ -144,7 +152,8 @@ export class AppService {
       data: data.data,
     });
 
-    return doc.save();
+    this.queueDocument(this.bpfTraceModel, doc);
+    return doc;
   }
 
   async saveOffCpuEvent(data: any) {
@@ -157,7 +166,8 @@ export class AppService {
       duration_us: data.duration_us,
       stack: data.stack,
     });
-    return doc.save();
+    this.queueDocument(this.offCpuModel, doc);
+    return doc;
   }
 
   async saveSchedulerEvent(data: any) {
@@ -171,7 +181,8 @@ export class AppService {
       run_delta_ms: data.run_delta_ms,
       ctx_switches: data.ctx_switches,
     });
-    return doc.save();
+    this.queueDocument(this.schedulerModel, doc);
+    return doc;
   }
 
   async savePerfStatEvent(data: any) {
@@ -182,7 +193,8 @@ export class AppService {
       pid: data.pid,
       metrics: data.metrics,
     });
-    return doc.save();
+    this.queueDocument(this.perfStatModel, doc);
+    return doc;
   }
 
   async saveTurboStatEvent(data: any) {
@@ -200,7 +212,8 @@ export class AppService {
       cor_watt: data.cor_watt,
       pkg_watt: data.pkg_watt ?? null,
     });
-    return doc.save();
+    this.queueDocument(this.turboStatModel, doc);
+    return doc;
   }
 
   private async handleMonadChunkPacket(
@@ -247,7 +260,8 @@ export class AppService {
 
       timestamp: new Date(timestamp / 1000),
     });
-    return doc.save();
+    this.queueDocument(this.chunkModel, doc);
+    return doc;
   }
 
   private async handleOutboundRouter(
@@ -275,6 +289,56 @@ export class AppService {
       appMessageHash: appMessageHash,
       timestamp: new Date(timestamp / 1000),
     });
-    return doc.save();
+    this.queueDocument(this.outboundRouterModel, doc);
+    return doc;
+  }
+
+  private queueDocument(model: Model<any>, doc: Document) {
+    const modelName = model.modelName;
+    const queue = this.batchQueues.get(modelName) ?? [];
+    queue.push(doc);
+    this.batchQueues.set(modelName, queue);
+
+    if (queue.length >= this.batchSize) {
+      this.flushQueue(modelName, model);
+      return;
+    }
+
+    if (!this.batchTimers.has(modelName)) {
+      const timer = setTimeout(
+        () => this.flushQueue(modelName, model),
+        this.batchIntervalMs,
+      );
+      this.batchTimers.set(modelName, timer);
+    }
+  }
+
+  private flushQueue(modelName: string, model: Model<any>) {
+    const queue = this.batchQueues.get(modelName);
+    if (!queue || queue.length === 0) {
+      this.clearBatchTimer(modelName);
+      return;
+    }
+
+    this.batchQueues.set(modelName, []);
+    this.clearBatchTimer(modelName);
+
+    const payloads = queue.map((doc) => doc.toObject());
+    model
+      .insertMany(payloads, { ordered: false })
+      .catch((error) => {
+        this.logger.error(
+          `Failed to persist batch for model=${modelName}`,
+          error.stack,
+        );
+      });
+  }
+
+  private clearBatchTimer(modelName: string) {
+    const timer = this.batchTimers.get(modelName);
+    if (timer) {
+      clearTimeout(timer);
+      this.batchTimers.delete(modelName);
+    }
   }
 }
