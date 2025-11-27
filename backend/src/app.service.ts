@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Document, Model } from 'mongoose';
 import { OutboundRouterMessage } from './schema/network/outbound-router-message.schema';
 import { NetworkEvent } from './common/enum-definition';
 import { NetworkEventType } from './common/type-definition';
@@ -121,12 +121,14 @@ export class AppService {
 
     if (isBft) {
       const doc = new this.bftLogModel(payload);
-      return doc.save();
+      this.persistDocument(doc);
+      return doc;
     }
 
     if (isExec) {
       const doc = new this.execLogModel(payload);
-      return doc.save();
+      this.persistDocument(doc);
+      return doc;
     }
 
     this.logger.warn(`[SYSTEM_LOG] Unknown unit=${unit}`);
@@ -144,7 +146,8 @@ export class AppService {
       data: data.data,
     });
 
-    return doc.save();
+    this.persistDocument(doc);
+    return doc;
   }
 
   async saveOffCpuEvent(data: any) {
@@ -157,7 +160,8 @@ export class AppService {
       duration_us: data.duration_us,
       stack: data.stack,
     });
-    return doc.save();
+    this.persistDocument(doc);
+    return doc;
   }
 
   async saveSchedulerEvent(data: any) {
@@ -171,7 +175,8 @@ export class AppService {
       run_delta_ms: data.run_delta_ms,
       ctx_switches: data.ctx_switches,
     });
-    return doc.save();
+    this.persistDocument(doc);
+    return doc;
   }
 
   async savePerfStatEvent(data: any) {
@@ -182,7 +187,8 @@ export class AppService {
       pid: data.pid,
       metrics: data.metrics,
     });
-    return doc.save();
+    this.persistDocument(doc);
+    return doc;
   }
 
   async saveTurboStatEvent(data: any) {
@@ -200,7 +206,8 @@ export class AppService {
       cor_watt: data.cor_watt,
       pkg_watt: data.pkg_watt ?? null,
     });
-    return doc.save();
+    this.persistDocument(doc);
+    return doc;
   }
 
   private async handleMonadChunkPacket(
@@ -247,7 +254,8 @@ export class AppService {
 
       timestamp: new Date(timestamp / 1000),
     });
-    return doc.save();
+    this.persistDocument(doc);
+    return doc;
   }
 
   private async handleOutboundRouter(
@@ -275,6 +283,16 @@ export class AppService {
       appMessageHash: appMessageHash,
       timestamp: new Date(timestamp / 1000),
     });
-    return doc.save();
+    this.persistDocument(doc);
+    return doc;
+  }
+
+  private persistDocument(doc: Document) {
+    doc.save().catch((error) => {
+      this.logger.error(
+        `Failed to persist document (${doc.constructor?.name ?? 'UnknownModel'})`,
+        error.stack,
+      );
+    });
   }
 }
