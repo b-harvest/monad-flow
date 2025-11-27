@@ -15,6 +15,9 @@ import { AppService } from '../app.service';
 
 @WebSocketGateway({
   cors: { origin: '*' },
+  transports: ['websocket'],
+  pingInterval: 45000,
+  pingTimeout: 90000,
 })
 export class WebSocketHandler
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
