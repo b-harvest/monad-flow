@@ -22,7 +22,9 @@ import (
 	"system/hook"
 
 	"github.com/joho/godotenv"
+	"github.com/zishang520/socket.io/clients/engine/v3/transports"
 	"github.com/zishang520/socket.io/clients/socket/v3"
+	"github.com/zishang520/socket.io/v3/pkg/types"
 )
 
 var hookTargets = []string{
@@ -212,7 +214,12 @@ func bridge[T any](ctx context.Context, input <-chan T, output chan<- DataPacket
 func runWebSocketManager(ctx context.Context, wg *sync.WaitGroup, input <-chan DataPacket, url string) {
 	defer wg.Done()
 
-	client, err := socket.Connect(url, nil)
+	opts := socket.DefaultOptions()
+	opts.SetTransports(types.NewSet(
+		transports.WebSocket,
+	))
+
+	client, err := socket.Connect(url, opts)
 	if err != nil {
 		log.Printf("Initial Socket Connection Failed: %v (Will try to reconnect...)", err)
 	}

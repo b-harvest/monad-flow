@@ -21,7 +21,9 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/joho/godotenv"
+	"github.com/zishang520/socket.io/clients/engine/v3/transports"
 	"github.com/zishang520/socket.io/clients/socket/v3"
+	"github.com/zishang520/socket.io/v3/pkg/types"
 )
 
 func main() {
@@ -307,7 +309,12 @@ func connectSocketIO() (*socket.Socket, error) {
 		return nil, nil
 	}
 
-	client, err := socket.Connect(sioURL, nil)
+	opts := socket.DefaultOptions()
+	opts.SetTransports(types.NewSet(
+		transports.WebSocket,
+	))
+
+	client, err := socket.Connect(sioURL, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate Socket.IO connection: %w", err)
 	}
