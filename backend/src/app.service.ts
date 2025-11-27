@@ -21,6 +21,12 @@ import { MonadBftLog } from './schema/system/monad-bft-log.schema';
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
+  private readonly batchSize =
+    Number(process.env.DB_BATCH_SIZE ?? 50) || 50;
+  private readonly batchIntervalMs =
+    Number(process.env.DB_BATCH_INTERVAL_MS ?? 1000) || 1000;
+  private readonly batchQueues = new Map<string, Document[]>();
+  private readonly batchTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     @InjectModel(MonadChunkPacket.name)
@@ -121,13 +127,13 @@ export class AppService {
 
     if (isBft) {
       const doc = new this.bftLogModel(payload);
-      this.persistDocument(doc);
+      this.queueDocument(this.bftLogModel, doc);
       return doc;
     }
 
     if (isExec) {
       const doc = new this.execLogModel(payload);
-      this.persistDocument(doc);
+      this.queueDocument(this.execLogModel, doc);
       return doc;
     }
 
@@ -146,7 +152,7 @@ export class AppService {
       data: data.data,
     });
 
-    this.persistDocument(doc);
+    this.queueDocument(this.bpfTraceModel, doc);
     return doc;
   }
 
@@ -160,7 +166,7 @@ export class AppService {
       duration_us: data.duration_us,
       stack: data.stack,
     });
-    this.persistDocument(doc);
+    this.queueDocument(this.offCpuModel, doc);
     return doc;
   }
 
@@ -175,7 +181,7 @@ export class AppService {
       run_delta_ms: data.run_delta_ms,
       ctx_switches: data.ctx_switches,
     });
-    this.persistDocument(doc);
+    this.queueDocument(this.schedulerModel, doc);
     return doc;
   }
 
@@ -187,7 +193,7 @@ export class AppService {
       pid: data.pid,
       metrics: data.metrics,
     });
-    this.persistDocument(doc);
+    this.queueDocument(this.perfStatModel, doc);
     return doc;
   }
 
@@ -206,7 +212,7 @@ export class AppService {
       cor_watt: data.cor_watt,
       pkg_watt: data.pkg_watt ?? null,
     });
-    this.persistDocument(doc);
+    this.queueDocument(this.turboStatModel, doc);
     return doc;
   }
 
@@ -254,7 +260,7 @@ export class AppService {
 
       timestamp: new Date(timestamp / 1000),
     });
-    this.persistDocument(doc);
+    this.queueDocument(this.chunkModel, doc);
     return doc;
   }
 
@@ -283,16 +289,56 @@ export class AppService {
       appMessageHash: appMessageHash,
       timestamp: new Date(timestamp / 1000),
     });
-    this.persistDocument(doc);
+    this.queueDocument(this.outboundRouterModel, doc);
     return doc;
   }
 
-  private persistDocument(doc: Document) {
-    doc.save().catch((error) => {
-      this.logger.error(
-        `Failed to persist document (${doc.constructor?.name ?? 'UnknownModel'})`,
-        error.stack,
+  private queueDocument(model: Model<any>, doc: Document) {
+    const modelName = model.modelName;
+    const queue = this.batchQueues.get(modelName) ?? [];
+    queue.push(doc);
+    this.batchQueues.set(modelName, queue);
+
+    if (queue.length >= this.batchSize) {
+      this.flushQueue(modelName, model);
+      return;
+    }
+
+    if (!this.batchTimers.has(modelName)) {
+      const timer = setTimeout(
+        () => this.flushQueue(modelName, model),
+        this.batchIntervalMs,
       );
-    });
+      this.batchTimers.set(modelName, timer);
+    }
+  }
+
+  private flushQueue(modelName: string, model: Model<any>) {
+    const queue = this.batchQueues.get(modelName);
+    if (!queue || queue.length === 0) {
+      this.clearBatchTimer(modelName);
+      return;
+    }
+
+    this.batchQueues.set(modelName, []);
+    this.clearBatchTimer(modelName);
+
+    const payloads = queue.map((doc) => doc.toObject());
+    model
+      .insertMany(payloads, { ordered: false })
+      .catch((error) => {
+        this.logger.error(
+          `Failed to persist batch for model=${modelName}`,
+          error.stack,
+        );
+      });
+  }
+
+  private clearBatchTimer(modelName: string) {
+    const timer = this.batchTimers.get(modelName);
+    if (timer) {
+      clearTimeout(timer);
+      this.batchTimers.delete(modelName);
+    }
   }
 }
