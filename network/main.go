@@ -69,9 +69,28 @@ func main() {
 	streamPool := tcpassembly.NewStreamPool(streamFactory)
 	assembler := tcpassembly.NewAssembler(streamPool)
 	var assemblerMutex sync.Mutex
-	var udpMutex sync.Mutex
+	// udpMutex removed
 
 	tcpChan := make(chan *model.Packet, 10000)
+	wsChan := make(chan map[string]interface{}, 10000)
+
+	// WebSocket Sender Worker
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		log.Println("[WS Worker] Started.")
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("[WS Worker] Shutting down.")
+				return
+			case payload := <-wsChan:
+				clientMutex.Lock()
+				client.Emit(util.MONAD_CHUNK_EVENT, payload)
+				clientMutex.Unlock()
+			}
+		}
+	}()
 
 	wg.Add(1)
 	go func() {
@@ -166,7 +185,7 @@ func main() {
 				currentMTU := mtu
 				currentRealLen := int(realLen)
 				currentIPv4Len := int(packet.IPv4Layer.Length)
-				go processUdpPacket(decoderCache, &udpMutex, packet, currentMTU, currentRealLen, currentIPv4Len, client, &clientMutex, captureTime)
+				go processUdpPacket(decoderCache, packet, currentMTU, currentRealLen, currentIPv4Len, wsChan, captureTime)
 			}
 		}
 	}()
@@ -186,13 +205,11 @@ func main() {
 
 func processUdpPacket(
 	decoderCache *decoder.DecoderCache,
-	udpMutex *sync.Mutex,
 	packet model.Packet,
 	mtu int,
 	realLen int,
 	ipv4Len int,
-	client *socket.Socket,
-	clientMutex *sync.Mutex,
+	wsChan chan<- map[string]interface{},
 	captureTime time.Time,
 ) {
 	if packet.Payload == nil {
@@ -217,14 +234,19 @@ func processUdpPacket(
 		chunkData := packet.Payload[offset : offset+currentStride]
 		offset += currentStride
 
-		udpMutex.Lock()
-		_, err := processChunk(decoderCache, packet, chunkData, client, clientMutex, captureTime)
+		payload, err := processChunk(decoderCache, packet, chunkData, captureTime)
 		if err != nil {
 			log.Printf("Failed to process chunk: %v", err)
-			udpMutex.Unlock()
 			continue
 		}
-		udpMutex.Unlock()
+		
+		if payload != nil {
+			select {
+			case wsChan <- payload:
+			default:
+				log.Println("[WARN] WS Channel full, dropping packet")
+			}
+		}
 	}
 }
 
@@ -232,11 +254,9 @@ func processChunk(
 	decoderCache *decoder.DecoderCache,
 	packet model.Packet,
 	chunkData []byte,
-	client *socket.Socket,
-	clientMutex *sync.Mutex,
 	captureTime time.Time,
-) ([]byte, error) {
-	chunk, err := parser.ParseMonadChunkPacket(packet, chunkData, client, clientMutex)
+) (map[string]interface{}, error) {
+	chunk, err := parser.ParseMonadChunkPacket(packet, chunkData)
 	if err != nil {
 		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
 	}
@@ -254,10 +274,6 @@ func processChunk(
 		"timestamp": captureTime.UnixMicro(),
 	}
 
-	clientMutex.Lock()
-	client.Emit(util.MONAD_CHUNK_EVENT, payload)
-	clientMutex.Unlock()
-
 	decodedMsg, err := decoderCache.HandleChunk(chunk)
 	if err != nil {
 		if !errors.Is(err, decoder.ErrDuplicateSymbol) {
@@ -271,7 +287,7 @@ func processChunk(
 			log.Printf("[RLP-ERROR] Failed to decode message: %v", err)
 		}
 	}
-	return nil, nil
+	return payload, nil
 }
 
 func getMTU() int {

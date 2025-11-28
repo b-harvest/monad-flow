@@ -4,12 +4,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"monad-flow/model"
-	"sync"
-
-	"github.com/zishang520/socket.io/clients/socket/v3"
 )
 
-func ParseMonadChunkPacket(packet model.Packet, data []byte, client *socket.Socket, clientMutex *sync.Mutex) (*model.MonadChunkPacket, error) {
+func ParseMonadChunkPacket(packet model.Packet, data []byte) (*model.MonadChunkPacket, error) {
 	chunk := &model.MonadChunkPacket{}
 
 	network := model.MonadNetworkPacket{}
