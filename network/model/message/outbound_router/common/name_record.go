@@ -23,34 +23,50 @@ type MonadNameRecord struct {
 	Signature  util.Signature
 }
 
-// DecodeRLP는 Rust의 커스텀 Decodable 구현을 따릅니다.
 func (nr *NameRecord) DecodeRLP(s *rlp.Stream) error {
-	// NameRecord가 [ip, port, seq] 리스트라고 가정합니다.
-	_, err := s.List()
-	if err != nil {
-		return fmt.Errorf("NameRecord RLP is not a list: %w", err)
-	}
+    // 1. 전체 리스트 진입 ([IP, Port, Seq])
+    _, err := s.List()
+    if err != nil {
+        return fmt.Errorf("NameRecord RLP is not a list: %w", err)
+    }
 
-	// 1. IP ([u8; 4])
-	var ipBytes []byte
-	if err = s.Decode(&ipBytes); err != nil {
-		return fmt.Errorf("failed to decode NameRecord IP: %w", err)
-	}
-	if len(ipBytes) != 4 {
-		return fmt.Errorf("decoded IP is not 4 bytes: got %d", len(ipBytes))
-	}
-	nr.Address = net.IP(ipBytes)
+    // 2. IP 디코딩 (Address)
+    var ipBytes []byte
+    if err = s.Decode(&ipBytes); err != nil {
+        return fmt.Errorf("failed to decode NameRecord IP: %w", err)
+    }
+    if len(ipBytes) != 4 {
+        return fmt.Errorf("decoded IP is not 4 bytes: got %d", len(ipBytes))
+    }
+    nr.Address = net.IP(ipBytes)
 
-	// 2. Port (u16)
-	if err = s.Decode(&nr.Port); err != nil {
-		return fmt.Errorf("failed to decode NameRecord Port: %w", err)
-	}
+    // 3. Port 디코딩
+    kind, _, err := s.Kind()
+    if err != nil {
+        return fmt.Errorf("failed to check kind for Port: %w", err)
+    }
 
-	// 3. Seq (u64)
-	if err = s.Decode(&nr.Seq); err != nil {
-		return fmt.Errorf("failed to decode NameRecord Seq: %w", err)
-	}
+    if kind == rlp.List {
+        if _, err = s.List(); err != nil {
+            return fmt.Errorf("failed to open Port list: %w", err)
+        }
+        if err = s.Decode(&nr.Port); err != nil {
+            return fmt.Errorf("failed to decode Port inside list: %w", err)
+        }
+        if err = s.ListEnd(); err != nil {
+            return fmt.Errorf("failed to close Port list: %w", err)
+        }
+    } else {
+        if err = s.Decode(&nr.Port); err != nil {
+            return fmt.Errorf("failed to decode NameRecord Port: %w", err)
+        }
+    }
 
-	// 4. 리스트 종료
-	return s.ListEnd()
+    // 4. Seq 디코딩
+    if err = s.Decode(&nr.Seq); err != nil {
+        return fmt.Errorf("failed to decode NameRecord Seq: %w", err)
+    }
+
+    // 5. 전체 리스트 종료
+    return s.ListEnd()
 }

@@ -7,6 +7,9 @@ import (
 )
 
 func ParseMonadChunkPacket(packet model.Packet, data []byte) (*model.MonadChunkPacket, error) {
+	if len(data) < 65 {
+		return nil, fmt.Errorf("data too short: expected at least 65 bytes, got %d", len(data))
+	}
 	chunk := &model.MonadChunkPacket{}
 
 	network := model.MonadNetworkPacket{}
