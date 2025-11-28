@@ -3,6 +3,7 @@ package decoder
 import (
 	"fmt"
 	"monad-flow/util"
+	"sync"
 
 	"github.com/bits-and-blooms/bitset"
 )
@@ -18,6 +19,7 @@ type managedDecoder struct {
 
 	seenSymbols    *bitset.BitSet
 	symbolCapacity int // 최대 심볼 ID (K * 2로 가정)
+	mu             sync.Mutex
 }
 
 func newManagedDecoder(k int, t int, totalSize uint32, capacity int) (*managedDecoder, error) {

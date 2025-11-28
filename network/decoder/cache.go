@@ -86,6 +86,9 @@ func (dc *DecoderCache) HandleChunk(chunk *model.MonadChunkPacket) (*DecodedMess
 	}
 
 	// 4. [시나리오 B] 이제 'decoder' 변수(기존 것이든 새로 만든 것이든)가
+	decoder.mu.Lock()
+	defer decoder.mu.Unlock()
+
 	err := decoder.ReceiveSymbol(chunk.Payload, chunk.ChunkID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive symbol %d for hash %x: %w", chunk.ChunkID, key, err)
