@@ -21,8 +21,7 @@ import { MonadBftLog } from './schema/system/monad-bft-log.schema';
 @Injectable()
 export class AppService {
   private readonly logger = new Logger(AppService.name);
-  private readonly batchSize =
-    Number(process.env.DB_BATCH_SIZE ?? 50) || 50;
+  private readonly batchSize = Number(process.env.DB_BATCH_SIZE ?? 50) || 50;
   private readonly batchIntervalMs =
     Number(process.env.DB_BATCH_INTERVAL_MS ?? 1000) || 1000;
   private readonly batchQueues = new Map<string, Document[]>();
@@ -289,8 +288,7 @@ export class AppService {
       appMessageHash: appMessageHash,
       timestamp: new Date(timestamp / 1000),
     });
-    this.queueDocument(this.outboundRouterModel, doc);
-    return doc;
+    return doc.save();
   }
 
   private queueDocument(model: Model<any>, doc: Document) {
@@ -324,14 +322,12 @@ export class AppService {
     this.clearBatchTimer(modelName);
 
     const payloads = queue.map((doc) => doc.toObject());
-    model
-      .insertMany(payloads, { ordered: false })
-      .catch((error) => {
-        this.logger.error(
-          `Failed to persist batch for model=${modelName}`,
-          error.stack,
-        );
-      });
+    model.insertMany(payloads, { ordered: false }).catch((error) => {
+      this.logger.error(
+        `Failed to persist batch for model=${modelName}`,
+        error.stack,
+      );
+    });
   }
 
   private clearBatchTimer(modelName: string) {
