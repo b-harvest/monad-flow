@@ -2,28 +2,32 @@
 
 import { useEffect } from "react";
 import { defaultSocketEndpoint } from "./config";
-import { appendSchedulerEvent } from "@/lib/storage/scheduler-cache";
+import { SchedulerParser } from "@/lib/api/scheduler";
+import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import { acquireSocket, releaseSocket } from "./shared-socket";
+import { createBufferedHandler } from "./buffered-handler";
 
 const EVENT_NAME = "SCHEDULER";
 
 export function useSchedulerStream(options?: { endpoint?: string }) {
   const endpoint = options?.endpoint ?? defaultSocketEndpoint;
+  const playbackMode = useNodePulseStore((state) => state.playback.mode);
 
   useEffect(() => {
-    if (!endpoint) {
+    if (playbackMode !== "live" || !endpoint) {
       return;
     }
 
     const socket = acquireSocket(endpoint);
 
-    const handlePayload = (payload: unknown) => {
-      try {
-        appendSchedulerEvent(payload);
-      } catch {
-        // validation errors already logged
+    const handlePayload = createBufferedHandler((payload: unknown) => {
+      const result = SchedulerParser.safeParse(payload);
+      if (!result.success) {
+        console.error("[SCHEDULER] Failed to parse payload", result.error);
+        return;
       }
-    };
+      useNodePulseStore.getState().pushSchedulerEvent(result.data);
+    });
 
     socket.on(EVENT_NAME, handlePayload);
 
@@ -31,5 +35,5 @@ export function useSchedulerStream(options?: { endpoint?: string }) {
       socket.off(EVENT_NAME, handlePayload);
       releaseSocket();
     };
-  }, [endpoint]);
+  }, [endpoint, playbackMode]);
 }

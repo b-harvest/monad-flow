@@ -1,25 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import {
-  getSchedulerEvents,
-  subscribeToSchedulerEvents,
-} from "@/lib/storage/scheduler-cache";
+import { useEffect, useMemo, useState } from "react";
 import type { SchedulerEvent } from "@/lib/api/scheduler";
-import {
-  getPerfStatEvents,
-  subscribeToPerfStatEvents,
-} from "@/lib/storage/perf-stat-cache";
 import type { PerfStatEvent } from "@/lib/api/perf-stat";
-import {
-  getOffCpuEvents,
-  subscribeToOffCpuEvents,
-} from "@/lib/storage/off-cpu-cache";
-import {
-  getTurboStatEvents,
-  subscribeToTurboStatEvents,
-} from "@/lib/storage/turbo-stat-cache";
 import type { TurboStatEvent } from "@/lib/api/turbo-stat";
+import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 
 interface PidSnapshot {
   pid: string;
@@ -56,26 +41,10 @@ const sortSnapshots = (rows: PidSnapshot[]) =>
 
 export function PidTelemetryPanel() {
   const [hydrated, setHydrated] = useState(false);
-  const schedulerEvents = useSyncExternalStore(
-    subscribeToSchedulerEvents,
-    getSchedulerEvents,
-    getSchedulerEvents,
-  );
-  const perfEvents = useSyncExternalStore(
-    subscribeToPerfStatEvents,
-    getPerfStatEvents,
-    getPerfStatEvents,
-  );
-  const offCpuEvents = useSyncExternalStore(
-    subscribeToOffCpuEvents,
-    getOffCpuEvents,
-    getOffCpuEvents,
-  );
-  const turboEvents = useSyncExternalStore(
-    subscribeToTurboStatEvents,
-    getTurboStatEvents,
-    getTurboStatEvents,
-  );
+  const schedulerEvents = useNodePulseStore((state) => state.schedulerEvents);
+  const perfEvents = useNodePulseStore((state) => state.perfStatEvents);
+  const offCpuEvents = useNodePulseStore((state) => state.offCpuEvents);
+  const turboEvents = useNodePulseStore((state) => state.turboStatEvents);
 
   useEffect(() => {
     setHydrated(true);
@@ -95,7 +64,7 @@ export function PidTelemetryPanel() {
       return map.get(key)!;
     };
 
-    schedulerEvents.slice(-50).forEach((event) => {
+    Object.values(schedulerEvents).forEach((event) => {
       const pid =
         (event as SchedulerEvent & { pid?: string | number }).pid ??
         event.main_pid;
@@ -115,7 +84,7 @@ export function PidTelemetryPanel() {
       entry.updatedAt = Math.max(entry.updatedAt, timestamp);
     });
 
-    perfEvents.slice(-30).forEach((event) => {
+    Object.values(perfEvents).forEach((event) => {
       const pid = (event as PerfStatEvent & { pid?: string | number }).pid;
       const entry = ensurePid(pid);
       if (!entry) return;
@@ -128,7 +97,7 @@ export function PidTelemetryPanel() {
       entry.updatedAt = Math.max(entry.updatedAt, timestamp);
     });
 
-    offCpuEvents.slice(-12).forEach((event) => {
+    Object.values(offCpuEvents).forEach((event) => {
       const entry = ensurePid(event.pid);
       if (!entry) return;
       const timestamp = Date.parse(event.timestamp) || 0;

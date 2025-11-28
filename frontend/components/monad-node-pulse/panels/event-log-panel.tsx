@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { MonitoringEvent } from "@/types/monad";
 
 interface EventLogPanelProps {
@@ -23,9 +24,12 @@ const SEVERITY_VARIANT: Record<
 };
 
 export function EventLogPanel({ events }: EventLogPanelProps) {
-  const reversed = [...events]
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, 50);
+  const recentEvents = useMemo(() => {
+    if (events.length === 0) return [];
+    return [...events]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 50);
+  }, [events]);
   return (
     <section className="hud-panel event-log-panel">
       <header className="panel-header">
@@ -34,11 +38,11 @@ export function EventLogPanel({ events }: EventLogPanelProps) {
           <p className="text-title">Socket.IO Stream</p>
         </div>
         <span className="badge" data-variant="info">
-          {reversed.length} / 50
+          {recentEvents.length} / 50
         </span>
       </header>
       <ol className="event-log-list">
-        {reversed.map((event) => (
+        {recentEvents.map((event) => (
           <li key={event.id} className="event-log-item">
             <div>
               <span className="event-time">

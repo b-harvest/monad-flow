@@ -12,6 +12,9 @@ interface CommandNavProps {
   onPlaybackChange: (patch: Partial<PlaybackState>) => void;
   processTelemetryVisible: boolean;
   onToggleProcessTelemetry: () => void;
+  historicalLoading: boolean;
+  historicalError: string | null;
+  onHistoricalFetch: (range: { from: number; to: number }) => void;
 }
 
 const UTC_FORMATTER = new Intl.DateTimeFormat("en-GB", {
@@ -24,12 +27,27 @@ const UTC_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 
 const SPEED_OPTIONS: PlaybackState["speed"][] = [0.25, 0.5, 1, 2, 4];
 
+const formatDatetimeLocal = (timestamp: number) => {
+  if (!Number.isFinite(timestamp)) return "";
+  const date = new Date(timestamp);
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+const parseDatetimeLocal = (value: string, fallback: number) => {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export function CommandNav({
   connectionStatus,
   playback,
   onPlaybackChange,
   processTelemetryVisible,
   onToggleProcessTelemetry,
+  historicalError,
+  historicalLoading,
+  onHistoricalFetch,
 }: CommandNavProps) {
   const localIp = useNodePulseStore((state) => state.localNodeIp);
   const setLocalNodeIp = useNodePulseStore((state) => state.setLocalNodeIp);
@@ -66,10 +84,46 @@ export function CommandNav({
     onPlaybackChange({ cursor: nextCursor, mode: "historical", isPlaying: false });
   };
 
+  const [historicPanelOpen, setHistoricPanelOpen] = useState(false);
+  const [panelRange, setPanelRange] = useState({ from: range.from, to: range.to });
+  const [panelError, setPanelError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPanelRange({ from: range.from, to: range.to });
+  }, [range.from, range.to]);
+
+  const handleHistoricToggle = () => {
+    onPlaybackChange({
+      mode: mode === "live" ? "historical" : "live",
+      cursor: Date.now(),
+    });
+    if (mode === "live") {
+      setHistoricPanelOpen(true);
+    } else {
+      setHistoricPanelOpen(false);
+      setPanelError(null);
+    }
+  };
+
+  const handlePanelLoad = async () => {
+    if (
+      !Number.isFinite(panelRange.from) ||
+      !Number.isFinite(panelRange.to) ||
+      panelRange.to <= panelRange.from
+    ) {
+      setPanelError("Start time must be before end time.");
+      return;
+    }
+    setPanelError(null);
+    await onHistoricalFetch(panelRange);
+    setHistoricPanelOpen(false);
+  };
+
   const startLabel = mounted
     ? new Date(range.from).toLocaleTimeString()
     : "—";
   const endLabel = mounted ? new Date(range.to).toLocaleTimeString() : "—";
+  const cursorLabel = mounted ? new Date(cursor).toLocaleTimeString() : "—";
 
   const statusLabel =
     connectionStatus === "connected"
@@ -79,7 +133,8 @@ export function CommandNav({
         : "Connecting";
 
   return (
-    <nav className="command-nav glass-card">
+    <>
+      <nav className="command-nav glass-card">
       <div className="command-brand">
         <Image
           src="/default.svg"
@@ -127,12 +182,7 @@ export function CommandNav({
             <button
               type="button"
               className={`status-toggle ghost ${mode === "live" ? "active" : ""}`}
-              onClick={() =>
-                onPlaybackChange({
-                  mode: mode === "live" ? "historical" : "live",
-                  cursor: Date.now(),
-                })
-              }
+            onClick={handleHistoricToggle}
             >
               {mode === "live" ? "Go Historic" : "Return Live"}
             </button>
@@ -161,17 +211,23 @@ export function CommandNav({
           />
           <span>{endLabel}</span>
         </div>
-        <div className="command-playback-speed">
-          {SPEED_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={`status-toggle ${speed === option ? "active" : ""}`}
-              onClick={() => onPlaybackChange({ speed: option })}
-            >
-              {option}×
-            </button>
-          ))}
+        <div className="command-playback-status">
+          <div className="command-playback-current">
+            <span className="text-label">Current</span>
+            <span className="text-number">{cursorLabel}</span>
+          </div>
+          <div className="command-playback-speed-inline">
+            {SPEED_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`status-toggle ${speed === option ? "active" : ""}`}
+                onClick={() => onPlaybackChange({ speed: option })}
+              >
+                {option}×
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <form className="command-actions" onSubmit={handleSubmit}>
@@ -189,6 +245,70 @@ export function CommandNav({
           Apply
         </button>
       </form>
-    </nav>
+      </nav>
+      {historicPanelOpen ? (
+        <div className="historical-overlay" role="dialog" aria-modal="true">
+          <div className="historical-panel">
+            <header className="historical-panel-head">
+              <p className="text-title">Historical Playback</p>
+              <button
+              type="button"
+              className="status-toggle ghost"
+              onClick={() => setHistoricPanelOpen(false)}
+            >
+              Close
+            </button>
+          </header>
+          <div className="historical-controls-block">
+            <label className="historical-range-label" htmlFor="panel-from">
+              From
+            </label>
+            <input
+              id="panel-from"
+              type="datetime-local"
+              value={formatDatetimeLocal(panelRange.from)}
+              onChange={(event) =>
+                setPanelRange((prev) => ({
+                  ...prev,
+                  from: parseDatetimeLocal(event.target.value, prev.from),
+                }))
+              }
+              className="historical-range-input"
+            />
+            <label className="historical-range-label" htmlFor="panel-to">
+              To
+            </label>
+            <input
+              id="panel-to"
+              type="datetime-local"
+              value={formatDatetimeLocal(panelRange.to)}
+              onChange={(event) =>
+                setPanelRange((prev) => ({
+                  ...prev,
+                  to: parseDatetimeLocal(event.target.value, prev.to),
+                }))
+              }
+              className="historical-range-input"
+            />
+              <div className="historical-panel-actions">
+                <button
+                  type="button"
+                  className={`status-toggle ${historicalLoading ? "active" : ""}`}
+                  onClick={handlePanelLoad}
+                  disabled={historicalLoading}
+                >
+                  {historicalLoading ? "Loading…" : "Load Logs"}
+                </button>
+              </div>
+            {panelError ? (
+              <p className="historical-error" role="status">
+                {panelError}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      ) : null}
+    </>
   );
 }

@@ -3,10 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import type { OutboundRouterEvent } from "@/lib/api/outbound-router";
-import {
-  getOutboundRouterEvents,
-  subscribeToOutboundRouterEvents,
-} from "@/lib/storage/outbound-router-cache";
 import { fetchOutboundAppMessage } from "@/lib/api/outbound-router";
 
 function formatHash(hash: string) {
@@ -47,17 +43,10 @@ export function ChunkQueueDetailPanel() {
   const closeDetailPanel = () => setSelectedPacketId(null);
   const closeRouterPanel = () => setSelectedRouterId(null);
 
-  const [routerEvents, setRouterEvents] = useState<OutboundRouterEvent[]>([]);
-
-  useEffect(() => {
-    setRouterEvents(getOutboundRouterEvents());
-    const unsubscribe = subscribeToOutboundRouterEvents(() => {
-      setRouterEvents(getOutboundRouterEvents());
-    });
-    return unsubscribe;
-  }, []);
+  const routerEvents = useNodePulseStore((state) => state.routerEvents);
 
   const entries = useMemo(() => {
+    const MAX_ENTRIES = 7;
     return Object.entries(chunkQueue)
       .filter(([, packets]) => packets.length > 0)
       .sort(
@@ -65,15 +54,15 @@ export function ChunkQueueDetailPanel() {
           (b[1][b[1].length - 1]?.timestamp ?? 0) -
           (a[1][a[1].length - 1]?.timestamp ?? 0),
       )
-      .slice(0, 30);
+      .slice(0, MAX_ENTRIES);
   }, [chunkQueue]);
 
   const orderedRouterEvents = useMemo(() => {
-    return [...routerEvents]
-      .sort(
-        (a, b) => resolveTimestamp(b.timestamp) - resolveTimestamp(a.timestamp),
-      )
-      .slice(0, 50);
+    if (routerEvents.length === 0) {
+      return [];
+    }
+    const limit = 5;
+    return routerEvents.slice(0, limit);
   }, [routerEvents]);
 
   const selectedRouterEvent =
@@ -269,11 +258,6 @@ export function ChunkQueueDetailPanel() {
             )}
           </div>
         </div>
-        {orderedRouterEvents.length > 0 ? (
-          <p className="chunk-placeholder">
-            Select a router packet to open detailed view.
-          </p>
-        ) : null}
       </div>
     </div>
       {selectedPacket ? (

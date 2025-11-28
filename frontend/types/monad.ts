@@ -1,3 +1,6 @@
+import type { MonadChunkEvent } from "@/lib/api/monad-chunk";
+import type { OutboundRouterEvent } from "@/lib/api/outbound-router";
+
 export type MonadNodeState = "leader" | "active" | "idle" | "failed" | "syncing";
 
 export type RaptorGroup = "primary" | "secondary";
@@ -126,17 +129,6 @@ export interface AlertToast {
   createdAt: number;
 }
 
-export interface OutboundRouterEventSummary {
-  id: string;
-  messageType: number;
-  appMessageHash?: string;
-  timestamp: number;
-  peer: string;
-  size: number;
-  status: "delivered" | "pending" | "blocked";
-  detail: string;
-}
-
 export interface SocketEventRecord {
   event: string;
   payload: string;
@@ -155,3 +147,15 @@ export interface ChunkPacketRecord {
   size: number;
   payload: unknown;
 }
+
+export type HistoricalEvent =
+  | {
+      type: "chunk";
+      timestamp: number;
+      payload: MonadChunkEvent;
+    }
+  | {
+      type: "router";
+      timestamp: number;
+      payload: OutboundRouterEvent;
+    };

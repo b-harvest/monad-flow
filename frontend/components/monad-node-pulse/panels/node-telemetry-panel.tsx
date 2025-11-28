@@ -1,17 +1,7 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
-import {
-  getBpfTraceEvents,
-  subscribeToBpfTraceEvents,
-} from "@/lib/storage/bpf-trace-cache";
 
 const UPDATED_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
@@ -23,12 +13,8 @@ const UPDATED_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
 
 export function NodeTelemetryPanel() {
   const nodes = useNodePulseStore((state) => state.nodes);
+  const bpfTraceEvents = useNodePulseStore((state) => state.bpfTraceEvents);
   const [hydrated, setHydrated] = useState(false);
-  const bpfTraceEvents = useSyncExternalStore(
-    subscribeToBpfTraceEvents,
-    getBpfTraceEvents,
-    getBpfTraceEvents,
-  );
 
   useEffect(() => {
     setHydrated(true);
@@ -40,37 +26,33 @@ export function NodeTelemetryPanel() {
   );
 
   const bpfSeries = useMemo(() => {
-    const map = new Map<
-      string,
-      { funcName: string; values: { timestamp: number; value: number }[] }
-    >();
-    const recent = bpfTraceEvents.slice(-80);
-    recent.forEach((event) => {
-      const duration = Number(event.duration_ns ?? "0");
-      if (!Number.isFinite(duration) || duration <= 0) {
-        return;
-      }
-      const timestamp = Date.parse(event.timestamp) || Date.now();
-      const next = map.get(event.func_name) ?? {
-        funcName: event.func_name,
-        values: [],
-      };
-      next.values = [
-        ...next.values,
-        { timestamp, value: duration },
-      ].slice(-20);
-      map.set(event.func_name, next);
-    });
-    return Array.from(map.values())
-      .sort((a, b) => a.funcName.localeCompare(b.funcName))
-      .slice(0, 6);
+    return Object.values(bpfTraceEvents)
+      .map((events) => {
+        if (events.length === 0) return null;
+        const funcName = events[0].func_name;
+        const values = events.map((e) => {
+          const timestamp = Date.parse(e.timestamp) || Date.now();
+          const duration = Number(e.duration_ns ?? "0");
+          return { timestamp, value: duration };
+        });
+        return { funcName, values };
+      })
+      .filter((item) => item !== null)
+      .sort((a, b) => a!.funcName.localeCompare(b!.funcName));
   }, [bpfTraceEvents]);
 
   const lastUpdated = useMemo(() => {
-    const ts = bpfTraceEvents[bpfTraceEvents.length - 1]?.timestamp;
-    if (!ts) return null;
-    const date = new Date(ts);
-    return Number.isNaN(date.getTime()) ? null : date;
+    let maxTs = 0;
+    Object.values(bpfTraceEvents).forEach((events) => {
+      const last = events[events.length - 1];
+      if (last) {
+        const ts = Date.parse(last.timestamp);
+        if (!Number.isNaN(ts) && ts > maxTs) {
+          maxTs = ts;
+        }
+      }
+    });
+    return maxTs > 0 ? new Date(maxTs) : null;
   }, [bpfTraceEvents]);
 
   return (

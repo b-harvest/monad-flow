@@ -1346,6 +1346,98 @@ a {
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+.command-playback-current {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  margin-bottom: var(--space-2);
+}
+
+.command-playback-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.command-playback-speed-inline {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.historical-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.historical-range-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+}
+
+.historical-range-input {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-secondary);
+  background: rgba(14, 9, 28, 0.85);
+  color: var(--color-text-primary);
+  padding: 0.4rem 0.65rem;
+  font-family: var(--font-mono);
+}
+
+.historical-error {
+  color: var(--color-danger-500);
+  font-size: 0.8rem;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-mono);
+}
+
+.historical-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+}
+
+.historical-panel {
+  width: min(420px, 90vw);
+  background: rgba(16, 12, 30, 0.95);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-primary);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-lg);
+}
+
+.historical-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.historical-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.historical-controls-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 .metrics-duo {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -1691,7 +1783,7 @@ a {
   flex: 1;
   display: grid;
   grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
+  gap: var(--space-2);
   min-height: 0;
 }
 
@@ -1885,7 +1977,7 @@ a {
 }
 
 .router-panel {
-  padding-top: var(--space-3);
+  padding-top: var(--space-1);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;

@@ -1,48 +1,36 @@
 "use client";
 
-import { useMemo, useState, useEffect, useSyncExternalStore } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { SystemLogEvent } from "@/lib/api/system-log";
-import {
-  getSystemLogEvents,
-  subscribeToSystemLogEvents,
-} from "@/lib/storage/system-log-cache";
+import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 
 export function SystemLogPanel() {
   const [hydrated, setHydrated] = useState(false);
-  const events = useSyncExternalStore(
-    subscribeToSystemLogEvents,
-    getSystemLogEvents,
-    getSystemLogEvents,
-  );
+  const events = useNodePulseStore((state) => state.systemLogEvents);
 
   useEffect(() => {
     setHydrated(true);
   }, []);
 
   const groups = useMemo(() => {
-    if (events.length === 0) return [];
-    const grouped = new Map<string, SystemLogEvent[]>();
-    events.slice(-100).forEach((event) => {
-      const bucket = grouped.get(event.unit) ?? [];
-      bucket.push(event);
-      grouped.set(event.unit, bucket);
-    });
-    return Array.from(grouped.entries())
+    const entries = Object.entries(events);
+    if (entries.length === 0) return [];
+
+    return entries
       .sort(([unitA], [unitB]) => unitA.localeCompare(unitB))
       .map(([unit, logs]) => {
+        // Logs are already limited to 10 in store, just sort them for display
         const sorted = [...logs].sort(
           (a, b) =>
-            (Date.parse(a.timestamp) || 0) - (Date.parse(b.timestamp) || 0),
+            (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0),
         );
-        const recent = sorted.slice(-4).reverse();
-        const latestTs = recent[0] ? Date.parse(recent[0].timestamp) || 0 : 0;
+        const latestTs = sorted[0] ? Date.parse(sorted[0].timestamp) || 0 : 0;
         return {
           unit,
           latestTs,
-          messages: recent,
+          messages: sorted,
         };
-      })
-      .slice(0, 2);
+      });
   }, [events]);
 
   return (

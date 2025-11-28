@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { defaultSocketEndpoint } from "./config";
-import { appendMonadChunkEvent } from "@/lib/storage/monad-chunk-cache";
+import { MonadChunkParser } from "@/lib/api/monad-chunk";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
+import { prepareChunkData } from "@/lib/monad/chunk-event-handler";
 import { acquireSocket, releaseSocket } from "./shared-socket";
 
 const EVENT_NAME = "MONAD_CHUNK";
 
 export function useMonadChunkStream(options?: { endpoint?: string }) {
   const endpoint = options?.endpoint ?? defaultSocketEndpoint;
+  const playbackMode = useNodePulseStore((state) => state.playback.mode);
+  const bufferRef = useRef<any[]>([]);
 
   useEffect(() => {
-    if (!endpoint) {
+    if (playbackMode !== "live" || !endpoint) {
       return;
     }
 
@@ -31,62 +34,37 @@ export function useMonadChunkStream(options?: { endpoint?: string }) {
     };
 
     const handlePayload = (payload: unknown) => {
-      try {
-        const { event } = appendMonadChunkEvent(payload);
-        const state = useNodePulseStore.getState();
-        const localId = state.ensureLocalNode();
-        const localIp = state.localNodeIp;
-        const srcIp = event.network.ipv4.srcIp;
-        const dstIp = event.network.ipv4.dstIp;
-        const srcPort = event.network.port.srcPort;
-        const dstPort = event.network.port.dstPort;
-
-        let direction: "inbound" | "outbound" = "inbound";
-        let peerIp = srcIp;
-        let peerPort = srcPort;
-        const hasLocal =
-          localIp && localIp !== "64.31.48.109" && localIp.trim().length > 0;
-
-        if (hasLocal && srcIp === localIp) {
-          direction = "outbound";
-          peerIp = dstIp;
-          peerPort = dstPort;
-        } else if (hasLocal && dstIp === localIp) {
-          direction = "inbound";
-          peerIp = srcIp;
-          peerPort = srcPort;
-        }
-
-        const peerId = state.upsertChunkPeer(peerIp, peerPort);
-        state.addEffect({
-          id: `chunk-${event.chunkId}-${event.timestamp}-${Math.random().toString(36).slice(2, 6)}`,
-          type: "chunk",
-          fromNodeId: direction === "inbound" ? peerId : localId,
-          toNodeId: direction === "inbound" ? localId : peerId,
-          createdAt: Date.now(),
-          ttl: 1500,
-          direction,
-        });
-        state.pushChunkPacket({
-          id: `packet-${event.chunkId}-${event.timestamp}-${Math.random().toString(36).slice(2, 6)}`,
-          appMessageHash: event.appMessageHash,
-          chunkId: event.chunkId,
-          timestamp: Date.now(),
-          fromIp: direction === "inbound" ? peerIp : localIp,
-          fromPort: direction === "inbound" ? peerPort : event.network.port.srcPort,
-          toIp: direction === "inbound" ? localIp : peerIp,
-          toPort: direction === "inbound" ? event.network.port.dstPort : peerPort,
-          size: event.appMessageLen ?? event.merkleProof?.length ?? 0,
-          payload: event,
-        });
-      } catch {
-        // parsing errors already logged in cache helper
-      }
+      // Buffer raw payloads
+      bufferRef.current.push(payload);
     };
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
     socket.on(EVENT_NAME, handlePayload);
+
+    const flushInterval = setInterval(() => {
+      if (bufferRef.current.length === 0) return;
+
+      const batch = bufferRef.current.splice(0);
+      const state = useNodePulseStore.getState();
+      const localIp = state.localNodeIp;
+      const localId = state.ensureLocalNode(); // Ensure local node exists and get ID
+
+      const preparedItems = batch
+        .map((payload) => {
+          const result = MonadChunkParser.safeParse(payload);
+          if (!result.success) {
+            console.error("[MONAD_CHUNK] Failed to parse payload", result.error);
+            return null;
+          }
+          return prepareChunkData(result.data, localIp, localId);
+        })
+        .filter((item) => item !== null);
+
+      if (preparedItems.length > 0) {
+        state.batchIngestChunks(preparedItems);
+      }
+    }, 100);
 
     const pruneInterval = window.setInterval(() => {
       useNodePulseStore.getState().pruneInactiveNodes();
@@ -96,8 +74,9 @@ export function useMonadChunkStream(options?: { endpoint?: string }) {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off(EVENT_NAME, handlePayload);
+      clearInterval(flushInterval);
       window.clearInterval(pruneInterval);
       releaseSocket();
     };
-  }, [endpoint]);
+  }, [endpoint, playbackMode]);
 }

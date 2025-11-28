@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo } from "react";
+import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import type { ConsensusMetrics, MonadNode } from "@/types/monad";
-import type { OutboundRouterEvent } from "@/lib/api/outbound-router";
-import {
-  getOutboundRouterEvents,
-  subscribeToOutboundRouterEvents,
-} from "@/lib/storage/outbound-router-cache";
+import type { ProposalSnapshot } from "@/lib/monad/normalize-proposal";
 
 interface MetricsPanelProps {
   metrics: ConsensusMetrics;
@@ -17,36 +14,21 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 
 export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
   const leaderNode = nodes.find((node) => node.id === metrics.leaderId);
-  const [hydrated, setHydrated] = useState(false);
-  const outboundEvents = useSyncExternalStore(
-    subscribeToOutboundRouterEvents,
-    getOutboundRouterEvents,
-    getOutboundRouterEvents,
+  const proposalSnapshots = useNodePulseStore(
+    (state) => state.proposalSnapshots,
   );
 
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
-
-  const proposals = useMemo(() => {
-    const normalized: ProposalSnapshot[] = [];
-    outboundEvents.forEach((event) => {
-      const snapshot = normalizeProposal(event);
-      if (snapshot) {
-        normalized.push(snapshot);
-      }
-    });
-    return normalized;
-  }, [outboundEvents]);
-
-  const latestProposal =
-    hydrated && proposals.length > 0 ? proposals[proposals.length - 1] : null;
-  const previousProposal =
-    hydrated && proposals.length > 1 ? proposals[proposals.length - 2] : null;
+  const { latestProposal, previousProposal } = useMemo(() => {
+    const count = proposalSnapshots.length;
+    return {
+      latestProposal: proposalSnapshots[count - 1] ?? null,
+      previousProposal: proposalSnapshots[count - 2] ?? null,
+    };
+  }, [proposalSnapshots]);
 
   const roundValue = latestProposal ? latestProposal.round : null;
   const epochValue = latestProposal ? latestProposal.epoch : null;
-  const leaderValue = latestProposal?.author ?? null;
+  const leaderValue = latestProposal?.author ?? leaderNode?.name ?? null;
   const blockHeightValue = latestProposal ? latestProposal.seqNum : null;
 
   const blockDeltaNs =
@@ -62,7 +44,6 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
       ? (latestProposal?.txCount ?? 0) / blockDeltaSeconds
       : null;
   const tpsValue = typeof txPerSecond === "number" ? txPerSecond : null;
-  const hasProposalData = hydrated && latestProposal !== null;
 
   return (
     <section className="hud-panel metrics-panel">
@@ -129,72 +110,6 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
 
     </section>
   );
-}
-
-interface ProposalSnapshot {
-  round: number;
-  epoch: number;
-  seqNum: number;
-  timestampNs: number;
-  author?: string;
-  txCount: number;
-}
-
-function normalizeProposal(event: OutboundRouterEvent): ProposalSnapshot | null {
-  if (event.messageType !== 1) {
-    return null;
-  }
-  const data = event.data as Record<string, any> | undefined | null;
-  const rootTypeId = getTypeId(data);
-  if (!data || rootTypeId !== 1) {
-    return null;
-  }
-  const stageOne = data.payload;
-  const stageTwo = stageOne?.payload;
-  const stageThree = stageTwo?.payload;
-  const messageType =
-    typeof stageTwo?.messageType === "number"
-      ? stageTwo?.messageType
-      : Number(stageTwo?.messageType);
-  if (!stageTwo || messageType !== 1 || !stageThree) {
-    return null;
-  }
-  const blockHeader = stageThree.Tip?.BlockHeader;
-  if (!blockHeader) {
-    return null;
-  }
-  const round = Number(stageThree.ProposalRound ?? blockHeader.BlockRound);
-  const epoch = Number(stageThree.ProposalEpoch ?? blockHeader.Epoch);
-  const seqNum = Number(blockHeader.SeqNum ?? stageThree.ExecutionInputs?.Number);
-  const timestampNsRaw =
-    blockHeader.TimestampNS ??
-    (stageThree.ExecutionInputs?.Timestamp
-      ? Number(stageThree.ExecutionInputs.Timestamp) * 1_000_000_000
-      : undefined);
-  const timestampNs = Number(timestampNsRaw ?? 0);
-  const txCount =
-    Array.isArray(stageThree.BlockBody?.ExecutionBody?.Transactions)
-      ? stageThree.BlockBody.ExecutionBody.Transactions.length
-      : 0;
-  if (!Number.isFinite(round) || !Number.isFinite(epoch) || !Number.isFinite(seqNum)) {
-    return null;
-  }
-  return {
-    round,
-    epoch,
-    seqNum,
-    timestampNs: Number.isFinite(timestampNs) ? timestampNs : 0,
-    author: blockHeader.Author,
-    txCount,
-  };
-}
-
-function getTypeId(value: Record<string, any> | undefined | null) {
-  if (!value) return null;
-  const raw = value.typeId ?? value.TypeID;
-  if (raw === undefined) return null;
-  const num = typeof raw === "number" ? raw : Number(raw);
-  return Number.isFinite(num) ? num : null;
 }
 
 interface MetricItemProps {

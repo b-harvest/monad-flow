@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { appendBpfTraceEvent } from "@/lib/storage/bpf-trace-cache";
+import { BpfTraceEventSchema } from "@/lib/api/bpf-trace";
 import { defaultSocketEndpoint } from "./config";
+import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import { acquireSocket, releaseSocket } from "./shared-socket";
+import { createBufferedHandler } from "./buffered-handler";
 
 const EVENT_NAME = "BPF_TRACE";
 
@@ -12,21 +14,23 @@ const EVENT_NAME = "BPF_TRACE";
  */
 export function useBpfTraceStream(options?: { endpoint?: string }) {
   const endpoint = options?.endpoint ?? defaultSocketEndpoint;
+  const playbackMode = useNodePulseStore((state) => state.playback.mode);
 
   useEffect(() => {
-    if (!endpoint) {
+    if (playbackMode !== "live" || !endpoint) {
       return;
     }
 
     const socket = acquireSocket(endpoint);
 
-    const handlePayload = (payload: unknown) => {
-      try {
-        appendBpfTraceEvent(payload);
-      } catch {
-        // Parsing errors are surfaced inside appendBpfTraceEvent.
+    const handlePayload = createBufferedHandler((payload: unknown) => {
+      const result = BpfTraceEventSchema.safeParse(payload);
+      if (!result.success) {
+        console.error("[BPF_TRACE] Failed to parse payload", result.error);
+        return;
       }
-    };
+      useNodePulseStore.getState().pushBpfTraceEvent(result.data);
+    });
 
     socket.on(EVENT_NAME, handlePayload);
 
@@ -34,5 +38,5 @@ export function useBpfTraceStream(options?: { endpoint?: string }) {
       socket.off(EVENT_NAME, handlePayload);
       releaseSocket();
     };
-  }, [endpoint]);
+  }, [endpoint, playbackMode]);
 }
