@@ -55,7 +55,6 @@ func (s *MonadTcpStream) run() {
 	for {
 		select {
 		case <-s.ctx.Done():
-			log.Printf("[TCP Reassembly] Context cancellation signal detected. Stopping stream handler (%s).", s.net.Src())
 			return
 		default:
 		}
@@ -73,15 +72,12 @@ func (s *MonadTcpStream) run() {
 		case <-s.ctx.Done():
 			return
 		case <-time.After(readTimeout):
-			log.Printf("[L1] SSNC header read timed out (10s): %s", s.net.Src())
 			return
 		case err = <-hdrChan:
 			if err != nil {
 				if err == io.EOF || err == io.ErrUnexpectedEOF || errors.Is(err, io.ErrClosedPipe) {
-					log.Printf("[L1] Stream normally closed (EOF/Closed): %s", s.net.Src())
 					return
 				}
-				log.Printf("[L1] Failed to read/parse SSNC header: %v", err)
 				return
 			}
 		}
@@ -98,15 +94,9 @@ func (s *MonadTcpStream) run() {
 		case <-s.ctx.Done():
 			return
 		case <-time.After(readTimeout):
-			log.Printf("[REASSEMBLY FAILED] Payload read timed out (10s): Expected %d bytes (Stream: %s)", hdr.Length, s.net.Src())
 			return
 		case err = <-payloadChan:
 			if err != nil {
-				if err == io.EOF || err == io.ErrUnexpectedEOF || errors.Is(err, io.ErrClosedPipe) {
-					log.Printf("[L2] Stream closed while reading payload (EOF/Closed): %s", s.net.Src())
-				} else {
-					log.Printf("[L2] Failed to read/parse payload: %v", err)
-				}
 				return
 			}
 		}
