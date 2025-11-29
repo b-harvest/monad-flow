@@ -30,15 +30,17 @@ export function NodeTelemetryPanel() {
       .map((events) => {
         if (events.length === 0) return null;
         const funcName = events[0].func_name;
-        const values = events.map((e) => {
-          const timestamp = Date.parse(e.timestamp) || Date.now();
-          const duration = Number(e.duration_ns ?? "0");
-          return { timestamp, value: duration };
-        });
+        const values = events
+          .map((e) => {
+            const timestamp = Date.parse(e.timestamp) || Date.now();
+            const duration = Number(e.duration_ns ?? "0");
+            return { timestamp, value: duration };
+          })
+          .filter((v) => Number.isFinite(v.value) && v.value > 0);
         return { funcName, values };
       })
-      .filter((item) => item !== null)
-      .sort((a, b) => a!.funcName.localeCompare(b!.funcName));
+      .filter((item): item is NonNullable<typeof item> => item !== null && item.values.length > 0)
+      .sort((a, b) => a.funcName.localeCompare(b.funcName));
   }, [bpfTraceEvents]);
 
   const lastUpdated = useMemo(() => {
