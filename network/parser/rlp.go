@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	WorkerCount = 4     
-	QueueSize   = 10000 
+	WorkerCount = 4
+	QueueSize   = 10000
 )
 
 var BackendURL = getBackendURL() + "/api/outbound-message"
@@ -42,20 +42,20 @@ func init() {
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
 			Timeout:   30 * time.Second,
-			KeepAlive: 60 * time.Second, 
+			KeepAlive: 60 * time.Second,
 		}).DialContext,
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   50,               
-		IdleConnTimeout:       90 * time.Second, 
+		MaxIdleConnsPerHost:   50,
+		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		ResponseHeaderTimeout: 60 * time.Second, 
+		ResponseHeaderTimeout: 60 * time.Second,
 	}
 
 	httpClient = &http.Client{
 		Transport: t,
-		Timeout:   60 * time.Second, 
+		Timeout:   60 * time.Second,
 	}
 
 	for i := 0; i < WorkerCount; i++ {
@@ -155,7 +155,7 @@ func HandleDecodedMessage(data []byte, appMessageHash string) error {
 		return nil
 	default:
 		log.Printf("WARNING: Task queue full (%d). Dropping message %s", QueueSize, appMessageHash)
-		return nil 
+		return nil
 	}
 }
 
