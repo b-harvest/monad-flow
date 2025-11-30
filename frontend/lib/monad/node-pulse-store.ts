@@ -11,6 +11,7 @@ import {
   type PlaybackSlice,
 } from "./slices/playback-slice";
 import { approximateGeoFromIp } from "@/lib/geo/ip-to-geo";
+import { resolvePeerName } from "@/lib/monad/known-peers";
 
 export type NodePulseState = NodeSlice &
   RouterSlice &
@@ -70,7 +71,7 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
         // But for this refactor, let's just create the nodes manually here.
         return {
           id: `chunk-${p.ip}:${p.port}`,
-          name: `${p.ip}:${p.port}`,
+          name: resolvePeerName(p.ip, p.port),
           role: "validator",
           ip: p.ip,
           uptimePct: 92 + Math.random() * 6,
