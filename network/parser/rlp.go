@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"time"
@@ -21,62 +20,17 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const (
-	WorkerCount = 4
-	QueueSize   = 10000
-)
-
 var BackendURL = getBackendURL() + "/api/outbound-message"
 
-type taskPayload struct {
-	Combined       model.OutboundRouterCombined
-	AppMessageHash string
-}
-
-var taskQueue = make(chan taskPayload, QueueSize)
-
-var httpClient *http.Client
-
-func init() {
-	t := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 60 * time.Second,
-		}).DialContext,
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   50,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		ResponseHeaderTimeout: 60 * time.Second,
-	}
-
-	httpClient = &http.Client{
-		Transport: t,
-		Timeout:   60 * time.Second,
-	}
-
-	for i := 0; i < WorkerCount; i++ {
-		go startWorker(i)
-	}
-	log.Printf("Initialized %d background workers (Low Concurrency Mode)", WorkerCount)
-}
-
-func startWorker(id int) {
-	for task := range taskQueue {
-		if err := outboundRouterSend(task.Combined, task.AppMessageHash); err != nil {
-			log.Printf("[Worker-%d] Failed finally: %v", id, err)
-		}
-	}
+var httpClient = &http.Client{
+	Timeout: 10 * time.Second,
 }
 
 func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash string) error {
 	captureTime := time.Now()
 	jsonData, err := json.Marshal(combined)
 	if err != nil {
-		return fmt.Errorf("marshal combined: %v", err)
+		return fmt.Errorf("Error marshaling combined data: %v", err)
 	}
 
 	payload := map[string]interface{}{
@@ -88,30 +42,20 @@ func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash st
 
 	finalBody, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal payload: %v", err)
+		return fmt.Errorf("Error marshaling final payload: %v", err)
 	}
 
-	var resp *http.Response
-	var reqErr error
-
-	for i := 0; i < 3; i++ {
-		resp, reqErr = httpClient.Post(BackendURL, "application/json", bytes.NewBuffer(finalBody))
-		if reqErr == nil {
-			break
-		}
-		sleepTime := time.Millisecond * 500 * time.Duration(i+1)
-		time.Sleep(sleepTime)
-	}
-
-	if reqErr != nil {
-		return fmt.Errorf("request failed after retries: %v", reqErr)
+	resp, err := httpClient.Post(BackendURL, "application/json", bytes.NewBuffer(finalBody))
+	if err != nil {
+		return fmt.Errorf("Failed to send to backend: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("backend status: %s", resp.Status)
+		return fmt.Errorf("Backend returned non-OK status: %s", resp.Status)
 	}
 
+	// log.Printf("Sent payload successfully. Size: %.2f KB", float64(len(finalBody))/1024.0)
 	return nil
 }
 
@@ -143,28 +87,26 @@ func HandleDecodedMessage(data []byte, appMessageHash string) error {
 	case util.AppMsgType:
 		msg, err := monad.DecodeMonadMessage(orm.Message)
 		if err != nil {
-			return fmt.Errorf("decode MonadMessage failed: %w", err)
+			return fmt.Errorf("decode MonadMessage(AppMessage) failed: %w", err)
 		}
 		combined.AppMessage = msg
 	default:
 		return nil
 	}
 
-	select {
-	case taskQueue <- taskPayload{Combined: combined, AppMessageHash: appMessageHash}:
-		return nil
-	default:
-		log.Printf("WARNING: Task queue full (%d). Dropping message %s", QueueSize, appMessageHash)
-		return nil
-	}
+	return outboundRouterSend(combined, appMessageHash)
 }
 
 func getBackendURL() string {
 	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found, using default Backend URL")
 	}
+
 	url := os.Getenv("BACKEND_URL")
+
 	if url == "" {
 		url = "http://localhost:3000"
 	}
+
 	return url
 }
