@@ -68,7 +68,7 @@ export function getProposalSnapshot(
     toNumber(stageThree.ProposalEpoch) ?? toNumber(blockHeader.Epoch);
   const executionInputs = asRecord(stageThree.ExecutionInputs);
   const seqNum =
-    toNumber(blockHeader.SeqNum) ?? toNumber(executionInputs?.Number);
+    toNumber(executionInputs?.Number) ?? toNumber(blockHeader.SeqNum);
   const executionTimestamp = toNumber(executionInputs?.Timestamp);
   const timestampNs =
     toNumber(blockHeader.TimestampNS) ??

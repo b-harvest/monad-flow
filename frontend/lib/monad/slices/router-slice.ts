@@ -49,14 +49,30 @@ export const createRouterSlice: StateCreator<RouterSlice> = (set) => ({
       );
       const trimmed = events.slice(0, MAX_ROUTER_EVENTS);
       const selected = state.selectedRouterEventId ?? event._id;
-      const proposal = getProposalSnapshot(event);
-      const proposalSnapshots = proposal
-        ? [...state.proposalSnapshots, proposal].slice(-MAX_PROPOSAL_SNAPSHOTS)
-        : state.proposalSnapshots;
+      
+      const newProposal = getProposalSnapshot(event);
+      let nextSnapshots = state.proposalSnapshots;
+
+      if (newProposal) {
+        // 1. Append new proposal
+        const combined = [...state.proposalSnapshots, newProposal];
+        
+        // 2. Deduplicate by round (keep the one with more info or just the latest processed? 
+        //    Usually round is unique. We'll use a Map to keep unique rounds.)
+        const uniqueMap = new Map<number, ProposalSnapshot>();
+        combined.forEach(p => uniqueMap.set(p.round, p));
+        
+        // 3. Sort by round ascending
+        const sorted = Array.from(uniqueMap.values()).sort((a, b) => a.round - b.round);
+        
+        // 4. Slice to keep only the last N
+        nextSnapshots = sorted.slice(-MAX_PROPOSAL_SNAPSHOTS);
+      }
+
       return {
         routerEvents: trimmed,
         selectedRouterEventId: selected,
-        proposalSnapshots,
+        proposalSnapshots: nextSnapshots,
       };
     }),
 
