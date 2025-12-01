@@ -5,6 +5,7 @@ go 1.24.1
 toolchain go1.24.9
 
 require (
+	github.com/BurntSushi/toml v1.5.0
 	github.com/bits-and-blooms/bitset v1.24.3
 	github.com/cilium/ebpf v0.20.0
 	github.com/google/gopacket v1.1.19
