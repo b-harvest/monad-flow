@@ -18,6 +18,7 @@ import { BpfTraceLog } from './schema/system/bpf-trace-log.schema';
 import { MonadExecutionLog } from './schema/system/monad-execution-log.schema';
 import { MonadBftLog } from './schema/system/monad-bft-log.schema';
 import { PingLatency } from './schema/network/ping-latency.schema';
+import { Validators } from './schema/network/validators.schema';
 
 @Injectable()
 export class AppService {
@@ -49,6 +50,8 @@ export class AppService {
     private readonly bftLogModel: Model<MonadBftLog>,
     @InjectModel(MonadExecutionLog.name)
     private readonly execLogModel: Model<MonadExecutionLog>,
+    @InjectModel(Validators.name)
+    private readonly validatorsModel: Model<Validators>,
   ) {}
 
   async getAll(): Promise<void> {}
@@ -59,6 +62,17 @@ export class AppService {
       throw new NotFoundException(`Message with ID ${id} not found`);
     }
     return message;
+  }
+
+  async getValidators(epoch: number): Promise<any> {
+    const validators = await this.validatorsModel
+      .findOne({ epoch: epoch })
+      .lean()
+      .exec();
+    if (!validators) {
+      throw new NotFoundException(`Validators with Epoch ${epoch} not found`);
+    }
+    return validators;
   }
 
   async getLogsByTimeRange(from: Date, to: Date, type: string): Promise<any> {
@@ -94,6 +108,27 @@ export class AppService {
           `Invalid log type: ${type}. Available types: chunk, router, offcpu, scheduler, perf, turbo, bpf, bft, exec`,
         );
     }
+  }
+
+  async upsertValidators(data: {
+    epoch: number;
+    data: { node_id: string; stake: number; cert_pubkey: string }[];
+  }) {
+    this.logger.log(`[DB] Upserting Validators epoch=${data.epoch}`);
+
+    const filter = { epoch: data.epoch };
+    const update = {
+      data: data.data,
+    };
+
+    const options = {
+      upsert: true,
+      new: true,
+    };
+
+    return this.validatorsModel
+      .findOneAndUpdate(filter, update, options)
+      .exec();
   }
 
   async createFromUDP(payload: {

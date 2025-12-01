@@ -70,4 +70,26 @@ export class AppController {
 
     response.status(HttpStatus.CREATED).send(result);
   }
+
+  @Post('/validators')
+  async createValidators(
+    @Body()
+    body: {
+      epoch: number;
+      data: { node_id: string; stake: number; cert_pubkey: string }[];
+    },
+    @Res() response: Response,
+  ) {
+    await this.appService.upsertValidators(body);
+    response.status(HttpStatus.CREATED).send();
+  }
+
+  @Get('/validators/:epoch')
+  async getValidators(
+    @Param('epoch') epoch: number,
+    @Res() response: Response,
+  ) {
+    const result = await this.appService.getValidators(epoch);
+    response.status(HttpStatus.OK).send(result);
+  }
 }
