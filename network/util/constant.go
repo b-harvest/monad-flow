@@ -4,11 +4,13 @@ package util
 
 const (
 	MONAD_CHUNK_EVENT = "MONAD_CHUNK"
+	PING_EVENT        = "PING_EVENT"
 )
 
 const (
 	MONAD_CHUNK_PACKET_EVENT = 0
 	OUTBOUND_ROUTER_EVENT    = 1
+	PING_LATENCY_EVENT       = 2
 )
 
 const (
@@ -49,6 +51,11 @@ const (
 	HeaderMagic   = 0x434e5353 // "SSNC"
 	HeaderSize    = 16
 	SignatureSize = 65 // L2: 65바이트 서명
+
+	MerkleHashLen      = 20
+	HeaderFullLen      = 108
+	HeaderSansSigLen   = 43 // 108 - 65
+	MonadSigningPrefix = "\x19monad/raptorcast-chunk/1\n"
 
 	BlockSyncReqMsgName       = "BlockSyncRequestMessage"
 	BlockSyncResMsgName       = "BlockSyncResponseMessage"

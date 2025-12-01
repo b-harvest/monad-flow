@@ -14,6 +14,8 @@ import (
 	"monad-flow/parser"
 	"monad-flow/util"
 
+	probing "github.com/prometheus-community/pro-bing"
+
 	"github.com/zishang520/socket.io/clients/socket/v3"
 )
 
@@ -25,6 +27,7 @@ type Manager struct {
 	clientMutex  *sync.Mutex
 	wsChan       chan map[string]interface{}
 	mtu          int
+	pingTargets  sync.Map
 }
 
 func NewManager(ctx context.Context, wg *sync.WaitGroup, client *socket.Socket, clientMutex *sync.Mutex, mtu int) *Manager {
@@ -50,9 +53,15 @@ func (m *Manager) Start() {
 				log.Println("[WS Worker] Shutting down.")
 				return
 			case payload := <-m.wsChan:
+				eventName := util.MONAD_CHUNK_EVENT
+				if msgType, ok := payload["type"].(uint); ok {
+					if msgType == util.PING_LATENCY_EVENT {
+						eventName = util.PING_EVENT
+					}
+				}
 				m.clientMutex.Lock()
 				if m.client != nil {
-					(*m.client).Emit(util.MONAD_CHUNK_EVENT, payload)
+					(*m.client).Emit(eventName, payload)
 				}
 				m.clientMutex.Unlock()
 			}
@@ -113,6 +122,21 @@ func (m *Manager) processChunk(
 		return nil, fmt.Errorf("chunk parsing failed: %w (data len: %d)", err, len(chunkData))
 	}
 
+	sourceIp := chunk.Network.Ipv4.SrcIp
+	if sourceIp != "" {
+		m.monitorLatency(sourceIp)
+	}
+
+	destinationIp := chunk.Network.Ipv4.DstIp
+	if destinationIp != "" {
+		m.monitorLatency(destinationIp)
+	}
+
+	senderInfo, err := util.RecoverSenderHybrid(chunk, chunkData)
+	if err != nil {
+		log.Printf("[Recovery-Warn] Failed to recover sender: %v", err)
+	}
+
 	jsonData, err := json.Marshal(chunk)
 	if err != nil {
 		log.Printf("JSON marshaling failed: %s", err)
@@ -120,9 +144,10 @@ func (m *Manager) processChunk(
 	}
 
 	payload := map[string]interface{}{
-		"type":      util.MONAD_CHUNK_PACKET_EVENT,
-		"data":      json.RawMessage(jsonData),
-		"timestamp": captureTime.UnixMicro(),
+		"type":        util.MONAD_CHUNK_PACKET_EVENT,
+		"data":        json.RawMessage(jsonData),
+		"timestamp":   captureTime.UnixMicro(),
+		"secp_pubkey": senderInfo.NodeID,
 	}
 
 	decodedMsg, err := m.decoderCache.HandleChunk(chunk)
@@ -139,4 +164,58 @@ func (m *Manager) processChunk(
 		}
 	}
 	return payload, nil
+}
+
+func (m *Manager) monitorLatency(ip string) {
+	if _, loaded := m.pingTargets.LoadOrStore(ip, true); loaded {
+		return
+	}
+
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		defer m.pingTargets.Delete(ip)
+
+		log.Printf("[Ping Monitor] Start monitoring: %s", ip)
+
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-m.ctx.Done():
+				return
+			case <-ticker.C:
+				m.sendPing(ip)
+			}
+		}
+	}()
+}
+
+func (m *Manager) sendPing(ip string) {
+	pinger, err := probing.NewPinger(ip)
+	if err != nil {
+		log.Printf("[Ping Error] Failed to init pinger for %s: %v", ip, err)
+		return
+	}
+	pinger.SetPrivileged(true)
+	pinger.Count = 1
+	pinger.Timeout = 800 * time.Millisecond
+
+	err = pinger.Run()
+	if err != nil {
+		log.Printf("[Ping Failed] IP: %s | Err: %v", ip, err)
+		return
+	}
+
+	stats := pinger.Statistics()
+	if stats.PacketsRecv > 0 {
+		now := time.Now()
+		m.wsChan <- map[string]interface{}{
+			"type":      util.PING_LATENCY_EVENT,
+			"ip":        ip,
+			"rtt_ms":    float64(stats.AvgRtt.Microseconds()) / 1000.0,
+			"timestamp": now.UnixMicro(),
+		}
+	}
 }

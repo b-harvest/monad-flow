@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"monad-flow/parser"
 	"monad-flow/tcp"
 	"monad-flow/udp"
-	"monad-flow/parser"
 	"monad-flow/util"
 	"os"
 	"os/signal"
@@ -119,13 +119,9 @@ func main() {
 	}()
 
 	<-ctx.Done()
-
 	log.Println("Stopping parser...")
 	monitor.Close()
-
 	tcpManager.Close()
-	// udpManager doesn't have Close() but it listens to ctx.Done()
-
 	log.Println("Waiting for workers...")
 	wg.Wait()
 	log.Println("Shutdown complete.")

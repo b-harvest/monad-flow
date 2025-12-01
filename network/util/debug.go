@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"fmt"
+	"net"
 )
 
 func ApplicationHexDump(data []byte) {
@@ -44,4 +45,30 @@ func ApplicationHexDump(data []byte) {
 		fmt.Printf("%-*s |%s|\n", padding, hexStr, asciiBuf.String())
 	}
 	fmt.Println("-----------------------------------------------------------------")
+}
+
+func IsLocalIP(ipStr string) bool {
+	if ipStr == "127.0.0.1" || ipStr == "::1" || ipStr == "localhost" {
+		return true
+	}
+
+	interfaces, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+
+	for _, addr := range interfaces {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+
+		if ip != nil && ip.String() == ipStr {
+			return true
+		}
+	}
+	return false
 }
