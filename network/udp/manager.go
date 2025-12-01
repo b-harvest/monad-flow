@@ -54,7 +54,7 @@ func (m *Manager) Start() {
 				return
 			case payload := <-m.wsChan:
 				eventName := util.MONAD_CHUNK_EVENT
-				if msgType, ok := payload["type"].(uint); ok {
+				if msgType, ok := payload["type"].(int); ok {
 					if msgType == util.PING_LATENCY_EVENT {
 						eventName = util.PING_EVENT
 					}
