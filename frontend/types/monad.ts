@@ -20,6 +20,8 @@ export interface MonadNode {
   isLocal?: boolean;
   latitude?: number;
   longitude?: number;
+  latency?: number;
+  pubKey?: string;
 }
 
 export interface BpfTraceSample {

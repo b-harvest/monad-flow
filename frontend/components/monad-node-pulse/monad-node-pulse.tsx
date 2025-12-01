@@ -28,6 +28,7 @@ import { useOffCpuStream } from "@/lib/socket/use-off-cpu-stream";
 import { useSchedulerStream } from "@/lib/socket/use-scheduler-stream";
 import { useTurboStatStream } from "@/lib/socket/use-turbo-stat-stream";
 import { useMonadChunkStream } from "@/lib/socket/use-monad-chunk-stream";
+import { usePingLatencyStream } from "@/lib/socket/use-ping-latency-stream";
 import { useOutboundRouterStream } from "@/lib/socket/use-outbound-router-stream";
 
 const MonadNodePulse = () => {
@@ -38,6 +39,7 @@ const MonadNodePulse = () => {
   useSchedulerStream();
   useTurboStatStream();
   useMonadChunkStream();
+  usePingLatencyStream();
   useOutboundRouterStream();
   const metrics = useNodePulseStore((state) => state.metrics);
   const nodes = useNodePulseStore((state) => state.nodes);

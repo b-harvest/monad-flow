@@ -19,6 +19,8 @@ export type NodePulseState = NodeSlice &
   NetworkSlice &
   PlaybackSlice & {
     batchIngestChunks: (items: any[]) => void;
+    batchIngestPings: (items: { ip: string; rtt_ms?: number }[]) => void;
+    ipToPubkey: Record<string, string>;
   };
 
 export const useNodePulseStore = create<NodePulseState>()((...a) => ({
@@ -26,7 +28,9 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
   ...createRouterSlice(...a),
   ...createTelemetrySlice(...a),
   ...createNetworkSlice(...a),
+  ...createNetworkSlice(...a),
   ...createPlaybackSlice(...a),
+  ipToPubkey: {},
 
   // Override resetNetworkGraph to clear both Node and Network slices
   // Override resetNetworkGraph to clear both Node and Network slices
@@ -46,6 +50,31 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
     const state = get();
     const now = Date.now();
 
+    // 0. Update IP->Pubkey map from unicast chunks
+    const nextIpToPubkey = { ...state.ipToPubkey };
+    let mapUpdated = false;
+
+    items.forEach((item) => {
+      const payload = item.packet.payload;
+      // Check for unicast chunks (broadcast flags are falsey)
+      // Note: broadcast is optional, so undefined means false (not broadcast)
+      const isBroadcast =
+        payload.broadcast || payload.broadCast || payload.secondaryBroadcast;
+
+      if (
+        payload &&
+        !isBroadcast &&
+        payload.secp_pubkey &&
+        payload.network?.ipv4?.srcIp
+      ) {
+        const ip = payload.network.ipv4.srcIp;
+        if (nextIpToPubkey[ip] !== payload.secp_pubkey) {
+          nextIpToPubkey[ip] = payload.secp_pubkey;
+          mapUpdated = true;
+        }
+      }
+    });
+
     // 1. Process Peers (Deduplicate)
     const newPeers = new Map<string, { ip: string; port: number }>();
     items.forEach((item) => {
@@ -56,22 +85,33 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
     });
 
     let nextNodes = state.nodes;
+
+    // If map updated, refresh names for existing nodes
+    if (mapUpdated) {
+      nextNodes = nextNodes.map((node) => {
+        const pubKey = nextIpToPubkey[node.ip];
+        // If we found a pubKey and the node doesn't have one or name needs update
+        if (pubKey && (!node.pubKey || node.pubKey !== pubKey)) {
+          // Extract port from ID (format: chunk-IP:PORT)
+          const portStr = node.id.split(":")[1];
+          const port = portStr ? parseInt(portStr) : 0;
+          return {
+            ...node,
+            pubKey,
+            name: resolvePeerName(pubKey, node.ip, port),
+          };
+        }
+        return node;
+      });
+    }
+
     if (newPeers.size > 0) {
       const newNodes = Array.from(newPeers.values()).map((p) => {
-        // We need to import createChunkNode logic or duplicate it here.
-        // Since createChunkNode is internal to node-slice, we can't easily access it.
-        // For now, we'll use the upsertChunkPeer logic but batched.
-        // Actually, let's just call upsertChunkPeer for new ones? No, that triggers re-renders.
-        // We should duplicate the simple node creation logic here for performance.
         const geo = approximateGeoFromIp(p.ip, p.port);
-        // To avoid importing heavy logic, let's just use a simplified node creation or rely on the fact that
-        // approximateGeoFromIp is fast. We can import it if needed, but let's try to keep it simple.
-        // Wait, `createChunkNode` in node-slice uses a cache.
-        // Ideally, we should expose a `batchUpsertPeers` in NodeSlice.
-        // But for this refactor, let's just create the nodes manually here.
+        const pubKey = nextIpToPubkey[p.ip];
         return {
           id: `chunk-${p.ip}:${p.port}`,
-          name: resolvePeerName(p.ip, p.port),
+          name: resolvePeerName(pubKey, p.ip, p.port),
           role: "validator",
           ip: p.ip,
           uptimePct: 92 + Math.random() * 6,
@@ -82,9 +122,10 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
           latitude: geo.latitude,
           longitude: geo.longitude,
           isLocal: false,
+          pubKey: pubKey,
         } as any; // Cast to MonadNode
       });
-      nextNodes = [...state.nodes, ...newNodes];
+      nextNodes = [...nextNodes, ...newNodes];
     }
 
     // 2. Process Effects
@@ -115,6 +156,31 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
       chunkQueue: nextChunkQueue,
       recentAppMessageHashes: limitedRecentHashes,
       lastEventTimestamp: now,
+      ipToPubkey: mapUpdated ? nextIpToPubkey : state.ipToPubkey,
+    });
+  },
+
+  batchIngestPings: (items) => {
+    const [set, get] = a;
+    const state = get();
+    const updates = new Map<string, number>();
+
+    items.forEach((item) => {
+      if (item.rtt_ms !== undefined) {
+        updates.set(item.ip, item.rtt_ms);
+      }
+    });
+
+    if (updates.size === 0) return;
+
+    set({
+      nodes: state.nodes.map((node) => {
+        const newLatency = updates.get(node.ip);
+        if (newLatency !== undefined) {
+          return { ...node, latency: newLatency };
+        }
+        return node;
+      }),
     });
   },
 }));

@@ -38,6 +38,7 @@ export const MonadChunkEventSchema = z.object({
   reserved: z.number(),
   chunkId: z.number(),
   timestamp: z.string(),
+  secp_pubkey: z.string(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
   __v: z.number().optional(),
