@@ -36,6 +36,10 @@ import {
   MonadExecutionLog,
   MonadExecutionLogSchema,
 } from '../schema/system/monad-execution-log.schema';
+import {
+  PingLatency,
+  PingLatencySchema,
+} from 'src/schema/network/ping-latency.schema';
 
 @Module({
   imports: [
@@ -84,6 +88,11 @@ import {
         name: MonadExecutionLog.name,
         schema: MonadExecutionLogSchema,
         collection: 'monad_execution_logs',
+      },
+      {
+        name: PingLatency.name,
+        schema: PingLatencySchema,
+        collection: 'ping_latencies',
       },
     ]),
   ],

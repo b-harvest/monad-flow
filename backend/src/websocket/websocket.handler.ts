@@ -51,6 +51,12 @@ export class WebSocketHandler
     this.sendToClient(WebsocketEvent.MONAD_CHUNK, doc);
   }
 
+  @SubscribeMessage(WebsocketEvent.PING)
+  async handlePing(@MessageBody() data: any) {
+    const doc = await this.appService.savePingLatency(data);
+    this.sendToClient(WebsocketEvent.PING, doc);
+  }
+
   @SubscribeMessage(WebsocketEvent.BPF_TRACE)
   async handleBPFTrace(@MessageBody() data: any) {
     const doc = await this.appService.saveBpfTrace(data);

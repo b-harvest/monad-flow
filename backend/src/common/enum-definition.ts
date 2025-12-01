@@ -1,6 +1,7 @@
 export enum WebsocketEvent {
   MONAD_CHUNK = 'MONAD_CHUNK',
   OUTBOUND_ROUTER = 'OUTBOUND_ROUTER',
+  PING = 'PING',
   BPF_TRACE = 'BPF_TRACE',
   SYSTEM_LOG = 'SYSTEM_LOG',
   OFF_CPU = 'OFF_CPU',
@@ -12,4 +13,5 @@ export enum WebsocketEvent {
 export enum NetworkEvent {
   MONAD_CHUNK,
   OUTBOUND_ROUTER,
+  PING_LATENCY,
 }

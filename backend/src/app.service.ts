@@ -17,6 +17,7 @@ import { TurboStatLog } from './schema/system/turbostat-log.schema';
 import { BpfTraceLog } from './schema/system/bpf-trace-log.schema';
 import { MonadExecutionLog } from './schema/system/monad-execution-log.schema';
 import { MonadBftLog } from './schema/system/monad-bft-log.schema';
+import { PingLatency } from './schema/network/ping-latency.schema';
 
 @Injectable()
 export class AppService {
@@ -32,6 +33,8 @@ export class AppService {
     private readonly chunkModel: Model<MonadChunkPacket>,
     @InjectModel(OutboundRouterMessage.name)
     private readonly outboundRouterModel: Model<OutboundRouterMessage>,
+    @InjectModel(PingLatency.name)
+    private readonly pingLatencyModel: Model<PingLatency>,
     @InjectModel(OffCpuLog.name)
     private readonly offCpuModel: Model<OffCpuLog>,
     @InjectModel(SchedulerLog.name)
@@ -68,6 +71,8 @@ export class AppService {
         return this.chunkModel.find(query).lean().exec();
       case 'router':
         return this.outboundRouterModel.find(query).lean().exec();
+      case 'ping':
+        return this.pingLatencyModel.find(query).lean().exec();
 
       case 'offcpu':
         return this.offCpuModel.find(query).lean().exec();
@@ -96,10 +101,11 @@ export class AppService {
     data: any;
     timestamp: number;
     appMessageHash?: string;
+    secp_pubkey?: string;
   }): Promise<any> {
-    const { type, data, timestamp, appMessageHash } = payload;
+    const { type, data, timestamp, appMessageHash, secp_pubkey } = payload;
     if (type === NetworkEvent.MONAD_CHUNK) {
-      return this.handleMonadChunkPacket(data, timestamp);
+      return this.handleMonadChunkPacket(data, timestamp, secp_pubkey);
     } else if (type === NetworkEvent.OUTBOUND_ROUTER) {
       return this.handleOutboundRouter(data, timestamp, appMessageHash);
     } else {
@@ -107,6 +113,17 @@ export class AppService {
         `Received UDP event:\n${JSON.stringify(payload, null, 2)}`,
       );
     }
+  }
+
+  async savePingLatency(data: any) {
+    this.logger.log(`[DB] Saving PingLatency ip=${data.ip}`);
+    const doc = new this.pingLatencyModel({
+      ip: data.ip,
+      rtt_ms: data.rtt_ms,
+      timestamp: data.timestamp,
+    });
+    this.queueDocument(this.pingLatencyModel, doc);
+    return doc;
   }
 
   async saveSystemdLog(data: any) {
@@ -218,6 +235,7 @@ export class AppService {
   private async handleMonadChunkPacket(
     data: any,
     timestamp: number,
+    secp_pubkey?: string,
   ): Promise<MonadChunkPacket> {
     this.logger.log(
       `[DB] Saving MonadChunkPacket epoch=${data.Epoch}, chunk=${data.ChunkID}, appMessageHash=${data.AppMessageHash}`,
@@ -234,6 +252,7 @@ export class AppService {
           dstPort: data.Network?.Port?.DstPort,
         },
       },
+      secp_pubkey: secp_pubkey,
 
       signature: '0x' + Buffer.from(data.Signature || []).toString('hex'),
       version: data.Version,

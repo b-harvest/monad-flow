@@ -17,6 +17,9 @@ export class MonadChunkPacket extends Document {
   };
 
   @Prop({ required: true })
+  secp_pubkey: string; // hex string
+
+  @Prop({ required: true })
   signature: string; // hex string
 
   @Prop({ required: true })
