@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import { useElementSize } from "@/lib/hooks/use-element-size";
+import { approximateGeoFromIp } from "@/lib/geo/ip-to-geo";
 
 const projectPoint = (
   latitude: number,
@@ -44,14 +45,23 @@ export function NodePulseMap() {
           typeof node.longitude === "number",
       )
       .map((node) => {
+        let lat = node.latitude;
+        let lon = node.longitude;
+
+        if ((!lat && lat !== 0) || (!lon && lon !== 0)) {
+           const geo = approximateGeoFromIp(node.ip);
+           lat = geo.latitude;
+           lon = geo.longitude;
+        }
+
         const { x, y } = projectPoint(
-          node.latitude ?? 0,
-          node.longitude ?? 0,
+          lat ?? 0,
+          lon ?? 0,
           size.width,
           size.height,
         );
         const last = node.lastActivity
-          ? new Date(node.lastActivity).getTime()
+          ? Date.parse(node.lastActivity)
           : 0;
         const isInactive = !node.isLocal && now - last > 60_000;
         return {

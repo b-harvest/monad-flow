@@ -10,6 +10,8 @@ import {
   createPlaybackSlice,
   type PlaybackSlice,
 } from "./slices/playback-slice";
+import { approximateGeoFromIp } from "@/lib/geo/ip-to-geo";
+import { resolvePeerName } from "@/lib/monad/known-peers";
 
 export type NodePulseState = NodeSlice &
   RouterSlice &
@@ -61,7 +63,7 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
         // For now, we'll use the upsertChunkPeer logic but batched.
         // Actually, let's just call upsertChunkPeer for new ones? No, that triggers re-renders.
         // We should duplicate the simple node creation logic here for performance.
-        const geo = { latitude: 0, longitude: 0 }; // approximateGeoFromIp is not imported here.
+        const geo = approximateGeoFromIp(p.ip, p.port);
         // To avoid importing heavy logic, let's just use a simplified node creation or rely on the fact that
         // approximateGeoFromIp is fast. We can import it if needed, but let's try to keep it simple.
         // Wait, `createChunkNode` in node-slice uses a cache.
@@ -69,16 +71,16 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
         // But for this refactor, let's just create the nodes manually here.
         return {
           id: `chunk-${p.ip}:${p.port}`,
-          name: `${p.ip}:${p.port}`,
+          name: resolvePeerName(p.ip, p.port),
           role: "validator",
           ip: p.ip,
           uptimePct: 92 + Math.random() * 6,
           participationRate: 85 + Math.random() * 10,
           lastActivity: new Date().toISOString(),
           state: "active",
-          position: [0, -0.5, 0], // CHUNK_RING_HEIGHT
-          latitude: 0,
-          longitude: 0,
+          position: [geo.longitude, -0.5, 0], // CHUNK_RING_HEIGHT
+          latitude: geo.latitude,
+          longitude: geo.longitude,
           isLocal: false,
         } as any; // Cast to MonadNode
       });

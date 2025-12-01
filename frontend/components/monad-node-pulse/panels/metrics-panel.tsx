@@ -37,8 +37,17 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
       : null;
   const blockDeltaSeconds =
     blockDeltaNs && blockDeltaNs > 0 ? blockDeltaNs / 1_000_000_000 : null;
+  const blockHeightDelta =
+    latestProposal && previousProposal
+      ? latestProposal.seqNum - previousProposal.seqNum
+      : null;
+
   const avgBlockTimeValue =
-    typeof blockDeltaSeconds === "number" ? blockDeltaSeconds : null;
+    typeof blockDeltaSeconds === "number" &&
+    blockHeightDelta !== null &&
+    blockHeightDelta > 0
+      ? blockDeltaSeconds / blockHeightDelta
+      : null;
   const txPerSecond =
     blockDeltaSeconds && blockDeltaSeconds > 0
       ? (latestProposal?.txCount ?? 0) / blockDeltaSeconds
