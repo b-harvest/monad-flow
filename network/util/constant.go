@@ -4,7 +4,7 @@ package util
 
 const (
 	MONAD_CHUNK_EVENT = "MONAD_CHUNK"
-	PING_EVENT        = "PING_EVENT"
+	PING_EVENT        = "PING"
 )
 
 const (
