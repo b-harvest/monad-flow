@@ -112,13 +112,13 @@ export class AppService {
 
   async upsertValidators(data: {
     epoch: number;
-    data: { node_id: string; stake: number; cert_pubkey: string }[];
+    validators: { node_id: string; stake: number; cert_pubkey: string }[];
   }) {
     this.logger.log(`[DB] Upserting Validators epoch=${data.epoch}`);
 
     const filter = { epoch: data.epoch };
     const update = {
-      data: data.data,
+      validators: data.validators,
     };
 
     const options = {

@@ -7,7 +7,7 @@ export class Validators extends Document {
   epoch: number;
 
   @Prop({ type: Object })
-  data?: {
+  validators?: {
     node_id: string;
     stake: number;
     cert_pubkey: string;

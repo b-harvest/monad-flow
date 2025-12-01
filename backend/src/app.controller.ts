@@ -76,7 +76,7 @@ export class AppController {
     @Body()
     body: {
       epoch: number;
-      data: { node_id: string; stake: number; cert_pubkey: string }[];
+      validators: { node_id: string; stake: number; cert_pubkey: string }[];
     },
     @Res() response: Response,
   ) {
