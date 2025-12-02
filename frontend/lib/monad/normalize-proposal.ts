@@ -7,6 +7,7 @@ export interface ProposalSnapshot {
   timestampNs: number;
   author?: string;
   txCount: number;
+  transactions: any[];
 }
 
 type UnknownRecord = Record<string, unknown>;
@@ -94,5 +95,6 @@ export function getProposalSnapshot(
     author:
       typeof blockHeader.Author === "string" ? blockHeader.Author : undefined,
     txCount,
+    transactions: Array.isArray(transactions) ? transactions : [],
   };
 }

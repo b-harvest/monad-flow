@@ -21,6 +21,13 @@ export type NodePulseState = NodeSlice &
     batchIngestChunks: (items: any[]) => void;
     batchIngestPings: (items: { ip: string; rtt_ms?: number }[]) => void;
     ipToPubkey: Record<string, string>;
+    recentPings: {
+      id: string;
+      ip: string;
+      rtt_ms: number;
+      timestamp: number;
+      name: string;
+    }[];
   };
 
 export const useNodePulseStore = create<NodePulseState>()((...a) => ({
@@ -31,6 +38,7 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
   ...createNetworkSlice(...a),
   ...createPlaybackSlice(...a),
   ipToPubkey: {},
+  recentPings: [],
 
   // Override resetNetworkGraph to clear both Node and Network slices
   // Override resetNetworkGraph to clear both Node and Network slices
@@ -164,14 +172,38 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
     const [set, get] = a;
     const state = get();
     const updates = new Map<string, number>();
+    const now = Date.now();
+    const newPings: {
+      id: string;
+      ip: string;
+      rtt_ms: number;
+      timestamp: number;
+      name: string;
+    }[] = [];
 
     items.forEach((item) => {
       if (item.rtt_ms !== undefined) {
         updates.set(item.ip, item.rtt_ms);
+
+        // Resolve name
+        const pubKey = state.ipToPubkey[item.ip];
+        // We don't have port info in ping, assume default or just use IP for fallback
+        // resolvePeerName expects port, let's pass 0 if unknown
+        const name = resolvePeerName(pubKey, item.ip, 0);
+
+        newPings.push({
+          id: `ping-${item.ip}-${now}-${Math.random().toString(36).slice(2, 6)}`,
+          ip: item.ip,
+          rtt_ms: item.rtt_ms,
+          timestamp: now,
+          name,
+        });
       }
     });
 
     if (updates.size === 0) return;
+
+    const nextRecentPings = [...newPings, ...state.recentPings].slice(0, 50);
 
     set({
       nodes: state.nodes.map((node) => {
@@ -181,6 +213,7 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
         }
         return node;
       }),
+      recentPings: nextRecentPings,
     });
   },
 }));

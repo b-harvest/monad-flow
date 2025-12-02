@@ -15,6 +15,9 @@ import { ChunkQueueDetailPanel } from "./panels/chunk-queue-detail-panel";
 import { NodeTelemetryPanel } from "./panels/node-telemetry-panel";
 import { PidTelemetryPanel } from "./panels/pid-telemetry-panel";
 import { SystemLogPanel } from "./panels/system-log-panel";
+import { TransactionFeedPanel } from "./panels/transaction-feed-panel";
+import { PingLatencyPanel } from "./panels/ping-latency-panel";
+
 import { CommandNav } from "./top-nav";
 import type { MonadChunkEvent } from "@/lib/api/monad-chunk";
 import type { OutboundRouterEvent } from "@/lib/api/outbound-router";
@@ -256,6 +259,8 @@ const MonadNodePulse = () => {
           <ChunkQueueDetailPanel />
         </div>
       </div>
+      <TransactionFeedPanel />
+      <PingLatencyPanel />
       <SystemLogPanel />
       {processTelemetryVisible && hasMounted && mapShellBounds ? (
         createPortal(
