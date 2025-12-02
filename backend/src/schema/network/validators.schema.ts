@@ -9,7 +9,7 @@ export class Validators extends Document {
   @Prop({ type: Object })
   validators?: {
     node_id: string;
-    stake: number;
+    stake: string;
     cert_pubkey: string;
   }[];
 }
