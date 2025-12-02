@@ -18,7 +18,7 @@ import { BpfTraceLog } from './schema/system/bpf-trace-log.schema';
 import { MonadExecutionLog } from './schema/system/monad-execution-log.schema';
 import { MonadBftLog } from './schema/system/monad-bft-log.schema';
 import { PingLatency } from './schema/network/ping-latency.schema';
-import { Validators } from './schema/network/validators.schema';
+import { Leader } from './schema/network/leader.schema';
 
 @Injectable()
 export class AppService {
@@ -50,8 +50,8 @@ export class AppService {
     private readonly bftLogModel: Model<MonadBftLog>,
     @InjectModel(MonadExecutionLog.name)
     private readonly execLogModel: Model<MonadExecutionLog>,
-    @InjectModel(Validators.name)
-    private readonly validatorsModel: Model<Validators>,
+    @InjectModel(Leader.name)
+    private readonly leaderModel: Model<Leader>,
   ) {}
 
   async getAll(): Promise<void> {}
@@ -62,17 +62,6 @@ export class AppService {
       throw new NotFoundException(`Message with ID ${id} not found`);
     }
     return message;
-  }
-
-  async getValidators(epoch: number): Promise<any> {
-    const validators = await this.validatorsModel
-      .findOne({ epoch: epoch })
-      .lean()
-      .exec();
-    if (!validators) {
-      throw new NotFoundException(`Validators with Epoch ${epoch} not found`);
-    }
-    return validators;
   }
 
   async getLogsByTimeRange(from: Date, to: Date, type: string): Promise<any> {
@@ -87,6 +76,8 @@ export class AppService {
         return this.outboundRouterModel.find(query).lean().exec();
       case 'ping':
         return this.pingLatencyModel.find(query).lean().exec();
+      case 'leader':
+        return this.leaderModel.find(query).lean().exec();
 
       case 'offcpu':
         return this.offCpuModel.find(query).lean().exec();
@@ -110,25 +101,25 @@ export class AppService {
     }
   }
 
-  async upsertValidators(data: {
+  async saveLeader(data: {
     epoch: number;
-    validators: { node_id: string; stake: string; cert_pubkey: string }[];
+    round: number;
+    node_id: string;
+    cert_pubkey: string;
+    stake: string;
+    timestamp: number;
   }) {
-    this.logger.log(`[DB] Upserting Validators epoch=${data.epoch}`);
-
-    const filter = { epoch: data.epoch };
-    const update = {
-      validators: data.validators,
-    };
-
-    const options = {
-      upsert: true,
-      new: true,
-    };
-
-    return this.validatorsModel
-      .findOneAndUpdate(filter, update, options)
-      .exec();
+    this.logger.log(`[DB] Saving Leader round=${data.round}`);
+    const doc = new this.leaderModel({
+      epoch: data.epoch,
+      round: data.round,
+      node_id: data.node_id,
+      cert_pubkey: data.cert_pubkey,
+      stake: data.stake,
+      timestamp: data.timestamp,
+    });
+    this.queueDocument(this.leaderModel, doc);
+    return doc;
   }
 
   async createFromUDP(payload: {

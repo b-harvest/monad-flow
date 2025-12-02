@@ -68,28 +68,25 @@ export class AppController {
       websocketPayload,
     );
 
-    response.status(HttpStatus.CREATED).send(result);
-  }
-
-  @Post('/validators')
-  async createValidators(
-    @Body()
-    body: {
-      epoch: number;
-      validators: { node_id: string; stake: string; cert_pubkey: string }[];
-    },
-    @Res() response: Response,
-  ) {
-    await this.appService.upsertValidators(body);
     response.status(HttpStatus.CREATED).send();
   }
 
-  @Get('/validators/:epoch')
-  async getValidators(
-    @Param('epoch') epoch: number,
+  @Post('/leader')
+  async createLeader(
+    @Body()
+    body: {
+      epoch: number;
+      round: number;
+      node_id: string;
+      cert_pubkey: string;
+      stake: string;
+      timestamp: number;
+    },
     @Res() response: Response,
   ) {
-    const result = await this.appService.getValidators(epoch);
-    response.status(HttpStatus.OK).send(result);
+    const createdDoc = await this.appService.saveLeader(body);
+    const result = createdDoc.toObject ? createdDoc.toObject() : createdDoc;
+    this.websocketHandler.sendToClient(WebsocketEvent.LEADER, result);
+    response.status(HttpStatus.CREATED).send();
   }
 }

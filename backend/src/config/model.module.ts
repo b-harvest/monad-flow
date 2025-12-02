@@ -40,10 +40,7 @@ import {
   PingLatency,
   PingLatencySchema,
 } from 'src/schema/network/ping-latency.schema';
-import {
-  Validators,
-  ValidatorsSchema,
-} from 'src/schema/network/validators.schema';
+import { Leader, LeaderSchema } from 'src/schema/network/leader.schema';
 
 @Module({
   imports: [
@@ -99,9 +96,9 @@ import {
         collection: 'ping_latencies',
       },
       {
-        name: Validators.name,
-        schema: ValidatorsSchema,
-        collection: 'validators',
+        name: Leader.name,
+        schema: LeaderSchema,
+        collection: 'leaders',
       },
     ]),
   ],
