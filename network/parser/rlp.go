@@ -93,7 +93,7 @@ func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash st
 		return fmt.Errorf("Error marshaling final payload: %v", err)
 	}
 
-	checkAndCacheProposalEpoch(finalBody)
+	checkAndTriggerLeaderStream(finalBody)
 
 	resp, err := httpClient.Post(OutboundMessageAPIURL, "application/json", bytes.NewBuffer(finalBody))
 	if err != nil {
@@ -109,7 +109,7 @@ func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash st
 	return nil
 }
 
-func checkAndCacheProposalEpoch(finalBody []byte) {
+func checkAndTriggerLeaderStream(finalBody []byte) {
 	var finalData map[string]interface{}
 	if err := json.Unmarshal(finalBody, &finalData); err != nil {
 		return
@@ -148,15 +148,14 @@ func checkAndCacheProposalEpoch(finalBody []byte) {
 				return
 			}
 			currentEpoch = proposalEpoch
+			if roundExists {
+				go streamLeaders(proposalEpoch, proposalRound)
+			}
 		}
-	}
-
-	if roundExists {
-		go leaderSend(proposalEpoch, proposalRound)
 	}
 }
 
-func leaderSend(epoch util.Epoch, currentRound util.Round) {
+func streamLeaders(epoch util.Epoch, startRound util.Round) {
 	cacheMap := validatorCache.Load().(map[util.Epoch][]util.Validator)
 	validators, ok := cacheMap[epoch]
 
@@ -164,17 +163,25 @@ func leaderSend(epoch util.Epoch, currentRound util.Round) {
 		return
 	}
 
-	targetRound := currentRound + 5
+	const maxRounds = 50000
+	const interval = 50 * time.Millisecond
 
-	leader, err := util.GetLeader(uint64(targetRound), validators)
-	if err != nil {
-		log.Printf("Error predicting leader for Round %d: %v", targetRound, err)
-		return
+	for i := 0; i < maxRounds; i++ {
+		targetRound := startRound + util.Round(i)
+		leader, err := util.GetLeader(uint64(targetRound), validators)
+		if err != nil {
+			log.Printf("Error calculating leader for Round %d: %v", targetRound, err)
+			continue
+		}
+		sendLeaderPayload(epoch, targetRound, leader)
+		time.Sleep(interval)
 	}
+}
 
+func sendLeaderPayload(epoch util.Epoch, round util.Round, leader util.Validator) {
 	payload := map[string]interface{}{
 		"epoch":       epoch,
-		"round":       currentRound,
+		"round":       round,
 		"node_id":     leader.NodeID,
 		"cert_pubkey": leader.CertPubkey,
 		"stake":       leader.Stake,
