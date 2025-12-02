@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"monad-flow/model"
@@ -21,82 +22,18 @@ import (
 )
 
 var currentEpoch util.Epoch = 0
+var validatorCache atomic.Value
 
 var BaseBackendURL = getBackendURL()
 var OutboundMessageAPIURL = BaseBackendURL + "/api/outbound-message"
-var ValidatorsAPIURL = BaseBackendURL + "/api/validators"
+var LeaderAPIURL = BaseBackendURL + "/api/leader"
 
 var httpClient = &http.Client{
 	Timeout: 10 * time.Second,
 }
 
-func validatorsSend() error {
-	config, err := util.LoadValidatorsConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load validators config: %w", err)
-	}
-	if len(config.ValidatorSets) == 0 {
-		return fmt.Errorf("no validator sets found in TOML file")
-	}
-
-	for _, currentSet := range config.ValidatorSets {
-		payload := map[string]interface{}{
-			"epoch":      currentSet.Epoch,
-			"validators": currentSet.Validators,
-		}
-
-		jsonPayload, err := json.Marshal(payload)
-		if err != nil {
-			return fmt.Errorf("Error marshaling final payload: %v", err)
-		}
-
-		resp, err := httpClient.Post(ValidatorsAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
-		if err != nil {
-			return fmt.Errorf("Failed to send to backend: %v", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("Backend returned non-OK status: %s", resp.Status)
-		}
-		// log.Printf("Successfully sent Validators (Epoch %d) to API endpoint: %s", currentSet.Epoch, ValidatorsAPIURL)
-	}
-	return nil
-}
-
-func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash string) error {
-	captureTime := time.Now()
-	jsonData, err := json.Marshal(combined)
-	if err != nil {
-		return fmt.Errorf("Error marshaling combined data: %v", err)
-	}
-
-	payload := map[string]interface{}{
-		"type":           util.OUTBOUND_ROUTER_EVENT,
-		"appMessageHash": appMessageHash,
-		"data":           json.RawMessage(jsonData),
-		"timestamp":      captureTime.UnixMicro(),
-	}
-
-	finalBody, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("Error marshaling final payload: %v", err)
-	}
-
-	checkAndCacheProposalEpoch(finalBody)
-
-	resp, err := httpClient.Post(OutboundMessageAPIURL, "application/json", bytes.NewBuffer(finalBody))
-	if err != nil {
-		return fmt.Errorf("Failed to send to backend: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Backend returned non-OK status: %s", resp.Status)
-	}
-
-	// log.Printf("Sent payload successfully. Size: %.2f KB", float64(len(finalBody))/1024.0)
-	return nil
+func init() {
+	validatorCache.Store(make(map[util.Epoch][]util.Validator))
 }
 
 func HandleDecodedMessage(data []byte, appMessageHash string) error {
@@ -137,24 +74,44 @@ func HandleDecodedMessage(data []byte, appMessageHash string) error {
 	return outboundRouterSend(combined, appMessageHash)
 }
 
-func getBackendURL() string {
-	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: .env file not found, using default Backend URL")
+func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash string) error {
+	captureTime := time.Now()
+	jsonData, err := json.Marshal(combined)
+	if err != nil {
+		return fmt.Errorf("Error marshaling combined data: %v", err)
 	}
 
-	url := os.Getenv("BACKEND_URL")
-
-	if url == "" {
-		url = "http://localhost:3000"
+	payload := map[string]interface{}{
+		"type":           util.OUTBOUND_ROUTER_EVENT,
+		"appMessageHash": appMessageHash,
+		"data":           json.RawMessage(jsonData),
+		"timestamp":      captureTime.UnixMicro(),
 	}
 
-	return url
+	finalBody, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("Error marshaling final payload: %v", err)
+	}
+
+	checkAndCacheProposalEpoch(finalBody)
+
+	resp, err := httpClient.Post(OutboundMessageAPIURL, "application/json", bytes.NewBuffer(finalBody))
+	if err != nil {
+		return fmt.Errorf("Failed to send to backend: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Backend returned non-OK status: %s", resp.Status)
+	}
+
+	// log.Printf("Sent payload successfully. Size: %.2f KB", float64(len(finalBody))/1024.0)
+	return nil
 }
 
 func checkAndCacheProposalEpoch(finalBody []byte) {
 	var finalData map[string]interface{}
 	if err := json.Unmarshal(finalBody, &finalData); err != nil {
-		log.Printf("Warning: Could not unmarshal finalBody for epoch check: %v", err)
 		return
 	}
 
@@ -162,35 +119,111 @@ func checkAndCacheProposalEpoch(finalBody []byte) {
 	if !ok {
 		return
 	}
-
 	appMessageMap, ok := dataMap["appMessage"].(map[string]interface{})
 	if !ok {
 		return
 	}
-
 	payloadMap, ok := appMessageMap["payload"].(map[string]interface{})
 	if !ok {
 		return
 	}
-
 	innerPayload, ok := payloadMap["payload"].(map[string]interface{})
 	if !ok {
 		return
 	}
-
 	finalInnerPayload, ok := innerPayload["payload"].(map[string]interface{})
 	if !ok {
 		return
 	}
 
-	proposalEpoch, exists := finalInnerPayload["ProposalEpoch"].(float64)
-	newEpoch := util.Epoch(uint64(proposalEpoch))
-	if exists {
-		if currentEpoch != newEpoch {
-			currentEpoch = newEpoch
-			if err := validatorsSend(); err != nil {
-				log.Printf("Failed to send validators data to API: %v", err)
+	parsedProposalEpoch, epochExists := finalInnerPayload["ProposalEpoch"].(float64)
+	proposalEpoch := util.Epoch(uint64(parsedProposalEpoch))
+	parsedProposalRound, roundExists := finalInnerPayload["ProposalRound"].(float64)
+	proposalRound := util.Round(uint64(parsedProposalRound))
+
+	if epochExists {
+		if currentEpoch != proposalEpoch || currentEpoch == 0 {
+			if err := cacheValidators(); err != nil {
+				log.Printf("Failed to update validators cache: %v", err)
+				return
 			}
+			currentEpoch = proposalEpoch
 		}
 	}
+
+	if roundExists {
+		go leaderSend(proposalEpoch, proposalRound)
+	}
+}
+
+func leaderSend(epoch util.Epoch, currentRound util.Round) {
+	cacheMap := validatorCache.Load().(map[util.Epoch][]util.Validator)
+	validators, ok := cacheMap[epoch]
+
+	if !ok {
+		return
+	}
+
+	targetRound := currentRound + 5
+
+	leader, err := util.GetLeader(uint64(targetRound), validators)
+	if err != nil {
+		log.Printf("Error predicting leader for Round %d: %v", targetRound, err)
+		return
+	}
+
+	payload := map[string]interface{}{
+		"epoch":       epoch,
+		"round":       currentRound,
+		"node_id":     leader.NodeID,
+		"cert_pubkey": leader.CertPubkey,
+		"stake":       leader.Stake,
+		"timestamp":   time.Now().UnixMicro(),
+	}
+
+	finalBody, err := json.Marshal(payload)
+	if err != nil {
+		fmt.Printf("Error marshaling final payload: %v\n", err)
+		return
+	}
+
+	resp, err := httpClient.Post(LeaderAPIURL, "application/json", bytes.NewBuffer(finalBody))
+	if err != nil {
+		fmt.Printf("Failed to send to backend: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		fmt.Printf("Backend returned non-OK status: %s\n", resp.Status)
+		return
+	}
+}
+
+func cacheValidators() error {
+	config, err := util.LoadValidatorsConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load validators config: %w", err)
+	}
+	if len(config.ValidatorSets) == 0 {
+		return fmt.Errorf("no validator sets found in TOML file")
+	}
+	newCache := make(map[util.Epoch][]util.Validator)
+	for _, vSet := range config.ValidatorSets {
+		ep := util.Epoch(vSet.Epoch)
+		newCache[ep] = vSet.Validators
+	}
+	validatorCache.Store(newCache)
+	return nil
+}
+
+func getBackendURL() string {
+	if err := godotenv.Load(); err != nil {
+		log.Println("Warning: .env file not found, using default Backend URL")
+	}
+	url := os.Getenv("BACKEND_URL")
+	if url == "" {
+		url = "http://localhost:3000"
+	}
+	return url
 }
