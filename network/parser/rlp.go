@@ -20,10 +20,48 @@ import (
 	"github.com/joho/godotenv"
 )
 
-var BackendURL = getBackendURL() + "/api/outbound-message"
+var currentEpoch util.Epoch = 0
+
+var BaseBackendURL = getBackendURL()
+var OutboundMessageAPIURL = BaseBackendURL + "/api/outbound-message"
+var ValidatorsAPIURL = BaseBackendURL + "/api/validators"
 
 var httpClient = &http.Client{
 	Timeout: 10 * time.Second,
+}
+
+func validatorsSend() error {
+	config, err := util.LoadValidatorsConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load validators config: %w", err)
+	}
+	if len(config.ValidatorSets) == 0 {
+		return fmt.Errorf("no validator sets found in TOML file")
+	}
+
+	for _, currentSet := range config.ValidatorSets {
+		payload := map[string]interface{}{
+			"epoch":      currentSet.Epoch,
+			"validators": currentSet.Validators,
+		}
+
+		jsonPayload, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("Error marshaling final payload: %v", err)
+		}
+
+		resp, err := httpClient.Post(ValidatorsAPIURL, "application/json", bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			return fmt.Errorf("Failed to send to backend: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("Backend returned non-OK status: %s", resp.Status)
+		}
+		// log.Printf("Successfully sent Validators (Epoch %d) to API endpoint: %s", currentSet.Epoch, ValidatorsAPIURL)
+	}
+	return nil
 }
 
 func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash string) error {
@@ -45,7 +83,9 @@ func outboundRouterSend(combined model.OutboundRouterCombined, appMessageHash st
 		return fmt.Errorf("Error marshaling final payload: %v", err)
 	}
 
-	resp, err := httpClient.Post(BackendURL, "application/json", bytes.NewBuffer(finalBody))
+	checkAndCacheProposalEpoch(finalBody)
+
+	resp, err := httpClient.Post(OutboundMessageAPIURL, "application/json", bytes.NewBuffer(finalBody))
 	if err != nil {
 		return fmt.Errorf("Failed to send to backend: %v", err)
 	}
@@ -109,4 +149,48 @@ func getBackendURL() string {
 	}
 
 	return url
+}
+
+func checkAndCacheProposalEpoch(finalBody []byte) {
+	var finalData map[string]interface{}
+	if err := json.Unmarshal(finalBody, &finalData); err != nil {
+		log.Printf("Warning: Could not unmarshal finalBody for epoch check: %v", err)
+		return
+	}
+
+	dataMap, ok := finalData["data"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	appMessageMap, ok := dataMap["appMessage"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	payloadMap, ok := appMessageMap["payload"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	innerPayload, ok := payloadMap["payload"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	finalInnerPayload, ok := innerPayload["payload"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	proposalEpoch, exists := finalInnerPayload["ProposalEpoch"].(float64)
+	newEpoch := util.Epoch(uint64(proposalEpoch))
+	if exists {
+		if currentEpoch != newEpoch {
+			currentEpoch = newEpoch
+			if err := validatorsSend(); err != nil {
+				log.Printf("Failed to send validators data to API: %v", err)
+			}
+		}
+	}
 }
