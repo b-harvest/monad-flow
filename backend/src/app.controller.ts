@@ -28,6 +28,16 @@ export class AppController {
     response.status(HttpStatus.OK).send(result);
   }
 
+  @Get('/leader/:round')
+  async getLeader(
+    @Param('round') round: number,
+    @Query('range') range: number,
+    @Res() response: Response,
+  ) {
+    const result = await this.appService.getLeaders(round, range);
+    response.status(HttpStatus.OK).send(result);
+  }
+
   @Get('/logs/:type')
   async getLogsByTimeRange(
     @Param('type') type: string,
@@ -84,9 +94,7 @@ export class AppController {
     },
     @Res() response: Response,
   ) {
-    const createdDoc = await this.appService.saveLeader(body);
-    const result = createdDoc.toObject ? createdDoc.toObject() : createdDoc;
-    this.websocketHandler.sendToClient(WebsocketEvent.LEADER, result);
+    await this.appService.saveLeader(body);
     response.status(HttpStatus.CREATED).send();
   }
 }

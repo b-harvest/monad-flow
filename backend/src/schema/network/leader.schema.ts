@@ -6,7 +6,7 @@ export class Leader extends Document {
   @Prop({ required: true })
   epoch: number;
 
-  @Prop({ required: true })
+  @Prop({ required: true, unique: true, index: true })
   round: number;
 
   @Prop({ required: true })

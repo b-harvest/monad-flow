@@ -64,6 +64,20 @@ export class AppService {
     return message;
   }
 
+  async getLeaders(round: number, range: number): Promise<any> {
+    const messages = await this.leaderModel
+      .find({
+        round: {
+          $gte: round,
+          $lte: round + range,
+        },
+      })
+      .sort({ round: 1 })
+      .lean()
+      .exec();
+    return messages;
+  }
+
   async getLogsByTimeRange(from: Date, to: Date, type: string): Promise<any> {
     const query = {
       timestamp: { $gte: from, $lte: to },
@@ -109,17 +123,16 @@ export class AppService {
     stake: string;
     timestamp: number;
   }) {
-    this.logger.log(`[DB] Saving Leader round=${data.round}`);
-    const doc = new this.leaderModel({
-      epoch: data.epoch,
-      round: data.round,
-      node_id: data.node_id,
-      cert_pubkey: data.cert_pubkey,
-      stake: data.stake,
-      timestamp: data.timestamp,
-    });
-    this.queueDocument(this.leaderModel, doc);
-    return doc;
+    this.logger.log(`[DB] Upserting Leader round=${data.round}`);
+    return this.leaderModel.findOneAndUpdate(
+      { round: data.round },
+      { $set: data },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      },
+    );
   }
 
   async createFromUDP(payload: {
