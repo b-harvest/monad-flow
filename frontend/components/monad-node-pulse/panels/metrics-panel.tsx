@@ -17,6 +17,7 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
   const proposalSnapshots = useNodePulseStore(
     (state) => state.proposalSnapshots,
   );
+  const leaders = useNodePulseStore((state) => state.leaders);
 
   const { latestProposal, previousProposal } = useMemo(() => {
     const count = proposalSnapshots.length;
@@ -55,7 +56,7 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
   const tpsValue = typeof txPerSecond === "number" ? txPerSecond : null;
 
   return (
-    <section className="hud-panel metrics-panel">
+    <section className="hud-panel metrics-panel h-full flex flex-col">
       <div className="metrics-duo">
         <div className="metrics-duo-item">
           <span className="text-label">Round</span>
@@ -79,7 +80,7 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
         </div>
       </div>
 
-      <div className="metrics-grid">
+      <div className="metrics-grid flex-1 content-stretch">
         <MetricItem
           label="Leader"
           value={leaderValue ?? "waiting…"}
@@ -116,7 +117,6 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
           isPlaceholder={typeof avgBlockTimeValue !== "number"}
         />
       </div>
-
     </section>
   );
 }
