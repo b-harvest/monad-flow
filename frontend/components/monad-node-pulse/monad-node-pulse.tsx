@@ -12,6 +12,7 @@ import { NodePulseMap } from "./node-pulse-map";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import { MetricsPanel } from "./panels/metrics-panel";
 import { ChunkQueueDetailPanel } from "./panels/chunk-queue-detail-panel";
+import { LeaderSchedulePanel } from "./panels/leader-schedule-panel";
 import { NodeTelemetryPanel } from "./panels/node-telemetry-panel";
 import { PidTelemetryPanel } from "./panels/pid-telemetry-panel";
 import { SystemLogPanel } from "./panels/system-log-panel";
@@ -33,6 +34,7 @@ import { useTurboStatStream } from "@/lib/socket/use-turbo-stat-stream";
 import { useMonadChunkStream } from "@/lib/socket/use-monad-chunk-stream";
 import { usePingLatencyStream } from "@/lib/socket/use-ping-latency-stream";
 import { useOutboundRouterStream } from "@/lib/socket/use-outbound-router-stream";
+import { useLeaderStream } from "@/lib/socket/use-leader-stream";
 
 const MonadNodePulse = () => {
   useBpfTraceStream();
@@ -43,7 +45,9 @@ const MonadNodePulse = () => {
   useTurboStatStream();
   useMonadChunkStream();
   usePingLatencyStream();
+  usePingLatencyStream();
   useOutboundRouterStream();
+  useLeaderStream();
   const metrics = useNodePulseStore((state) => state.metrics);
   const nodes = useNodePulseStore((state) => state.nodes);
   const playback = useNodePulseStore((state) => state.playback);
@@ -251,7 +255,12 @@ const MonadNodePulse = () => {
                   <NodePulseMap />
                 </Suspense>
               </div>
-              <MetricsPanel metrics={metrics} nodes={nodes} />
+              <div className="metrics-row">
+                <div>
+                  <MetricsPanel metrics={metrics} nodes={nodes} />
+                </div>
+                <LeaderSchedulePanel />
+              </div>
             </div>
           </div>
         </section>

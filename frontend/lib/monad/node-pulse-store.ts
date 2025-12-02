@@ -10,6 +10,7 @@ import {
   createPlaybackSlice,
   type PlaybackSlice,
 } from "./slices/playback-slice";
+import { createLeaderSlice, type LeaderSlice } from "./slices/leader-slice";
 import { approximateGeoFromIp } from "@/lib/geo/ip-to-geo";
 import { resolvePeerName } from "@/lib/monad/known-peers";
 
@@ -17,7 +18,8 @@ export type NodePulseState = NodeSlice &
   RouterSlice &
   TelemetrySlice &
   NetworkSlice &
-  PlaybackSlice & {
+  PlaybackSlice &
+  LeaderSlice & {
     batchIngestChunks: (items: any[]) => void;
     batchIngestPings: (items: { ip: string; rtt_ms?: number }[]) => void;
     ipToPubkey: Record<string, string>;
@@ -35,8 +37,8 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
   ...createRouterSlice(...a),
   ...createTelemetrySlice(...a),
   ...createNetworkSlice(...a),
-  ...createNetworkSlice(...a),
   ...createPlaybackSlice(...a),
+  ...createLeaderSlice(...a),
   ipToPubkey: {},
   recentPings: [],
 

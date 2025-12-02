@@ -8,6 +8,7 @@ export const SOCKET_EVENT_NAMES = [
   "PERF_STAT",
   "TURBO_STAT",
   "BFT",
+  "LEADER",
 ];
 
 export const defaultSocketEndpoint =
