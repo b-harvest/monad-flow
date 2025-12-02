@@ -2,39 +2,15 @@ package util
 
 import (
 	"fmt"
-	"math/big"
 	"os"
 
 	"github.com/BurntSushi/toml"
 	"github.com/joho/godotenv"
 )
 
-type Stake struct {
-	*big.Int
-}
-
-func (s *Stake) UnmarshalText(text []byte) error {
-	stakeStr := string(text)
-
-	if s.Int == nil {
-		s.Int = new(big.Int)
-	}
-
-	stakeBigInt, success := s.Int.SetString(stakeStr, 0)
-	if !success {
-		return fmt.Errorf("invalid hex stake value: %s", stakeStr)
-	}
-
-	if stakeBigInt.Sign() < 0 {
-		return fmt.Errorf("stake value is negative: %s", stakeStr)
-	}
-
-	return nil
-}
-
 type Validator struct {
 	NodeID     string `toml:"node_id" json:"node_id"`
-	Stake      Stake  `toml:"stake" json:"stake"`
+	Stake      string `toml:"stake" json:"stake"`
 	CertPubkey string `toml:"cert_pubkey" json:"cert_pubkey"`
 }
 
