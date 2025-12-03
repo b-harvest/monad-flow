@@ -210,12 +210,11 @@ func (m *Manager) sendPing(ip string) {
 
 	stats := pinger.Statistics()
 	if stats.PacketsRecv > 0 {
-		now := time.Now()
 		m.wsChan <- map[string]interface{}{
 			"type":      util.PING_LATENCY_EVENT,
 			"ip":        ip,
 			"rtt_ms":    float64(stats.AvgRtt.Microseconds()) / 1000.0,
-			"timestamp": now.UnixMicro(),
+			"timestamp": time.Now().Format("2006-01-02 15:04:05.000000"),
 		}
 	}
 }

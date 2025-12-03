@@ -185,7 +185,7 @@ func sendLeaderPayload(epoch util.Epoch, round util.Round, leader util.Validator
 		"node_id":     leader.NodeID,
 		"cert_pubkey": leader.CertPubkey,
 		"stake":       leader.Stake,
-		"timestamp":   time.Now().UnixMicro(),
+		"timestamp":   time.Now().Format("2006-01-02 15:04:05.000000"),
 	}
 
 	finalBody, err := json.Marshal(payload)
