@@ -7,6 +7,7 @@ import {
 
 const MAX_ROUTER_EVENTS = 50;
 const MAX_PROPOSAL_SNAPSHOTS = 20;
+const MAX_FORWARDED_TX = 25;
 
 const parseTimestampMs = (value: string | number | Date | undefined) => {
   if (typeof value === "number") {
@@ -26,19 +27,36 @@ const parseTimestampMs = (value: string | number | Date | undefined) => {
   return 0;
 };
 
+export interface ForwardedTxSummary {
+  hash: string;
+  to?: string;
+  value?: string;
+  timestamp: number;
+}
+
 export interface RouterSlice {
   routerEvents: OutboundRouterEvent[];
   selectedRouterEventId: string | null;
   proposalSnapshots: ProposalSnapshot[];
+  forwardedTxs: ForwardedTxSummary[];
   pushRouterEvent: (event: OutboundRouterEvent) => void;
   clearRouterEvents: () => void;
   setSelectedRouterEvent: (id: string) => void;
 }
 
+const getTypeId = (value: Record<string, any> | undefined | null) => {
+  if (!value) return null;
+  const raw = value.typeId ?? value.TypeID ?? value.type ?? value.Type;
+  if (raw === undefined) return null;
+  const num = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(num) ? num : null;
+};
+
 export const createRouterSlice: StateCreator<RouterSlice> = (set) => ({
   routerEvents: [],
   selectedRouterEventId: null,
   proposalSnapshots: [],
+  forwardedTxs: [],
 
   pushRouterEvent: (event) =>
     set((state) => {
@@ -49,7 +67,7 @@ export const createRouterSlice: StateCreator<RouterSlice> = (set) => ({
       );
       const trimmed = events.slice(0, MAX_ROUTER_EVENTS);
       const selected = state.selectedRouterEventId ?? event._id;
-      
+
       const newProposal = getProposalSnapshot(event);
       let nextSnapshots = state.proposalSnapshots;
 
@@ -69,10 +87,59 @@ export const createRouterSlice: StateCreator<RouterSlice> = (set) => ({
         nextSnapshots = sorted.slice(-MAX_PROPOSAL_SNAPSHOTS);
       }
 
+      // Extract ForwardedTxs if present (AppMessage - ForwardedTxs)
+      let nextForwarded = state.forwardedTxs;
+      if (event.messageType === 1) {
+        const data =
+          event.data && typeof event.data === "object"
+            ? (event.data as Record<string, unknown>)
+            : null;
+        const typeId = getTypeId(data ?? undefined);
+        if (typeId === 4) {
+          const payload = (data?.payload ?? []) as unknown;
+          if (Array.isArray(payload)) {
+            const ts = parseTimestampMs(event.timestamp);
+            const extracted: ForwardedTxSummary[] = payload
+              .map((raw) => {
+                if (
+                  !raw ||
+                  typeof raw !== "object" ||
+                  !("hash" in raw)
+                ) {
+                  return null;
+                }
+                const tx = raw as {
+                  hash?: string;
+                  to?: string;
+                  value?: string;
+                };
+                if (!tx.hash) return null;
+                return {
+                  hash: tx.hash,
+                  to: tx.to,
+                  value: tx.value,
+                  timestamp: ts,
+                };
+              })
+              .filter(
+                (item): item is ForwardedTxSummary =>
+                  item !== null,
+              );
+            if (extracted.length > 0) {
+              nextForwarded = [
+                ...extracted,
+                ...state.forwardedTxs,
+              ].slice(0, MAX_FORWARDED_TX);
+            }
+          }
+        }
+      }
+
       return {
         routerEvents: trimmed,
         selectedRouterEventId: selected,
         proposalSnapshots: nextSnapshots,
+        forwardedTxs: nextForwarded,
       };
     }),
 

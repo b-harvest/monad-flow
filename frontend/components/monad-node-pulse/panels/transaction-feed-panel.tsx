@@ -2,11 +2,15 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
+import type { ForwardedTxSummary } from "@/lib/monad/slices/router-slice";
 
 export function TransactionFeedPanel() {
   const [hydrated, setHydrated] = useState(false);
   const proposalSnapshots = useNodePulseStore(
     (state) => state.proposalSnapshots,
+  );
+  const forwardedTxs = useNodePulseStore(
+    (state) => state.forwardedTxs,
   );
 
   useEffect(() => {
@@ -29,6 +33,11 @@ export function TransactionFeedPanel() {
     // Since we flatMap from snapshots which are likely ordered, we can just reverse
     return allTxs.reverse().slice(0, 10);
   }, [proposalSnapshots]);
+
+  const forwarded = useMemo<ForwardedTxSummary[]>(() => {
+    if (!forwardedTxs || forwardedTxs.length === 0) return [];
+    return forwardedTxs.slice(0, 10);
+  }, [forwardedTxs]);
 
   return (
     <section className="transaction-feed-panel hud-panel">
@@ -53,67 +62,48 @@ export function TransactionFeedPanel() {
                 </div>
                 <span className="pid-updated">Live</span>
               </div>
-              <ul
-                className="system-log-messages"
-                style={{ minHeight: "600px", maxHeight: "800px", overflowY: "auto" }}
-              >
+              <ul className="system-log-messages tx-feed-list">
                 {transactions.map((tx, idx) => (
                   <li
                     key={`${tx.hash}-${idx}`}
-                    className="system-log-message"
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                      alignItems: "flex-start",
-                      padding: "12px",
-                      borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
-                    }}
+                    className="system-log-message tx-card"
                   >
-                    <span
-                      className="system-log-ts"
-                      style={{ fontSize: "0.75rem", opacity: 0.5, marginBottom: "2px" }}
-                    >
-                      {tx.proposalTimestamp
-                        ? new Date(tx.proposalTimestamp).toLocaleTimeString([], {
-                            hour12: false,
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                            fractionalSecondDigits: 3,
-                          })
-                        : "—"}
-                    </span>
-
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="text-white/40 text-[10px] uppercase tracking-wider w-10 shrink-0">
-                        Hash
+                    <div className="tx-card-head">
+                      <span className="tx-timestamp">
+                        {tx.proposalTimestamp
+                          ? new Date(tx.proposalTimestamp).toLocaleTimeString([], {
+                              hour12: false,
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                              fractionalSecondDigits: 3,
+                            })
+                          : "—"}
                       </span>
-                      <span
-                        className="text-white font-mono text-xs truncate"
-                        style={{ color: "#a5b4fc" }}
-                      >
-                        {tx.hash || "Unknown Tx"}
+                      <span className="tx-round-pill">
+                        Round&nbsp;
+                        <span className="tx-round-number">
+                          #{tx.proposalRound}
+                        </span>
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 w-full">
-                      <span className="text-white/40 text-[10px] uppercase tracking-wider w-10 shrink-0">
-                        Round
-                      </span>
-                      <span className="text-white font-mono text-xs">
-                        #{tx.proposalRound}
+                    <div className="tx-row">
+                      <span className="tx-label">Hash</span>
+                      <span
+                        className="tx-value tx-hash"
+                        title={tx.hash}
+                      >
+                        {formatHash(tx.hash)}
                       </span>
                     </div>
 
                     {tx.to && (
-                      <div className="flex items-center gap-2 w-full">
-                        <span className="text-white/40 text-[10px] uppercase tracking-wider w-10 shrink-0">
-                          To
-                        </span>
+                      <div className="tx-row">
+                        <span className="tx-label">To</span>
                         <span
-                          className="font-mono text-xs truncate"
-                          style={{ color: "#86efac" }}
+                          className="tx-value tx-address"
+                          title={tx.to}
                         >
                           {tx.to}
                         </span>
@@ -121,11 +111,9 @@ export function TransactionFeedPanel() {
                     )}
 
                     {tx.value && tx.value !== "0x0" && (
-                      <div className="flex items-center gap-2 w-full">
-                        <span className="text-white/40 text-[10px] uppercase tracking-wider w-10 shrink-0">
-                          Val
-                        </span>
-                        <span className="text-white/80 font-mono text-xs truncate">
+                      <div className="tx-row">
+                        <span className="tx-label">Value</span>
+                        <span className="tx-value tx-value">
                           {tx.value}
                         </span>
                       </div>
@@ -144,24 +132,84 @@ export function TransactionFeedPanel() {
               <div>
                 <span className="text-label">Forwarded Transactions</span>
               </div>
-              <span className="pid-updated">Coming Soon</span>
+              <span className="pid-updated">
+                {forwarded.length > 0 ? "Live" : "Waiting"}
+              </span>
             </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100px",
-                color: "rgba(255, 255, 255, 0.4)",
-                fontSize: "0.9em",
-                fontStyle: "italic",
-              }}
-            >
-              Preparing ForwardedTx Stream...
-            </div>
+            {!hydrated || forwarded.length === 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100px",
+                  color: "rgba(255, 255, 255, 0.4)",
+                  fontSize: "0.9em",
+                  fontStyle: "italic",
+                }}
+              >
+                Waiting for ForwardedTxs…
+              </div>
+            ) : (
+              <ul className="system-log-messages tx-feed-list">
+                {forwarded.map((tx, idx) => (
+                  <li
+                    key={`${tx.hash}-${idx}`}
+                    className="system-log-message tx-card"
+                  >
+                    <div className="tx-card-head">
+                      <span className="tx-timestamp">
+                        {tx.timestamp
+                          ? new Date(tx.timestamp).toLocaleTimeString([], {
+                              hour12: false,
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="tx-row">
+                      <span className="tx-label">Hash</span>
+                      <span
+                        className="tx-value tx-hash"
+                        title={tx.hash}
+                      >
+                        {formatHash(tx.hash)}
+                      </span>
+                    </div>
+                    {tx.to && (
+                      <div className="tx-row">
+                        <span className="tx-label">To</span>
+                        <span
+                          className="tx-value tx-address"
+                          title={tx.to}
+                        >
+                          {tx.to}
+                        </span>
+                      </div>
+                    )}
+                    {tx.value && tx.value !== "0x0" && (
+                      <div className="tx-row">
+                        <span className="tx-label">Value</span>
+                        <span className="tx-value tx-value">
+                          {tx.value}
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>
     </section>
   );
+}
+
+function formatHash(hash?: string) {
+  if (!hash) return "Unknown Tx";
+  if (hash.length <= 18) return hash;
+  return `${hash.slice(0, 10)}…${hash.slice(-6)}`;
 }
