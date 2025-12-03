@@ -67,11 +67,11 @@ func DecodeMonadMessage(b []byte) (*MonadMessage, error) {
 		msg.Payload = pMsg
 
 	case util.ForwardedTxMsgType:
-		var tx forwarded_tx.ForwardedTxMessage
-		if err := rlp.DecodeBytes(payloadBytes, &tx); err != nil {
+		txMsg, err := forwarded_tx.DecodeForwardedTxMessage(payloadBytes)
+		if err != nil {
 			return nil, fmt.Errorf("failed to decode ForwardedTxMessage: %w", err)
 		}
-		msg.Payload = &tx
+		msg.Payload = txMsg
 
 	case util.StateSyncMsgType:
 		m, err := state_sync.HandleStateSyncMessage(payloadBytes)

@@ -4,6 +4,7 @@ import {
   Get,
   HttpStatus,
   Param,
+  ParseIntPipe,
   Post,
   Query,
   Res,
@@ -30,8 +31,8 @@ export class AppController {
 
   @Get('/leader/:round')
   async getLeader(
-    @Param('round') round: number,
-    @Query('range') range: number,
+    @Param('round', ParseIntPipe) round: number,
+    @Query('range', ParseIntPipe) range: number,
     @Res() response: Response,
   ) {
     const result = await this.appService.getLeaders(round, range);
