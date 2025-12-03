@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import type { ConsensusMetrics, MonadNode } from "@/types/monad";
 import type { ProposalSnapshot } from "@/lib/monad/normalize-proposal";
@@ -96,27 +96,41 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
       <div className="metrics-duo">
         <div className="metrics-duo-item">
           <span className="text-label">Round</span>
-          {roundValue !== null ? (
-            <p className="text-display-hero">
-              {numberFormatter.format(roundValue)}
-            </p>
-          ) : (
-            <p className="text-display-hero text-placeholder">waiting…</p>
-          )}
+          <p
+            className={`text-display-hero ${
+              roundValue === null ? "text-placeholder" : ""
+            }`}
+          >
+            {roundValue !== null ? (
+              <AnimatedNumber
+                value={roundValue}
+                format={numberFormatter}
+              />
+            ) : (
+              "waiting…"
+            )}
+          </p>
         </div>
         <div className="metrics-duo-item">
           <span className="text-label">Epoch</span>
-          {epochValue !== null ? (
-            <p className="text-display-hero">
-              {numberFormatter.format(epochValue)}
-            </p>
-          ) : (
-            <p className="text-display-hero text-placeholder">waiting…</p>
-          )}
+          <p
+            className={`text-display-hero ${
+              epochValue === null ? "text-placeholder" : ""
+            }`}
+          >
+            {epochValue !== null ? (
+              <AnimatedNumber
+                value={epochValue}
+                format={numberFormatter}
+              />
+            ) : (
+              "waiting…"
+            )}
+          </p>
         </div>
       </div>
 
-      <div className="metrics-grid flex-1 content-stretch">
+      <div className="metrics-grid">
         <MetricItem
           label="Leader"
           value={leaderValue ?? "waiting…"}
@@ -126,9 +140,14 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
         <MetricItem
           label="TPS"
           value={
-            typeof tpsValue === "number"
-              ? numberFormatter.format(Math.round(tpsValue))
-              : "waiting…"
+            typeof tpsValue === "number" ? (
+              <AnimatedNumber
+                value={Math.round(tpsValue)}
+                format={numberFormatter}
+              />
+            ) : (
+              "waiting…"
+            )
           }
           helper="avg"
           isPlaceholder={typeof tpsValue !== "number"}
@@ -137,7 +156,12 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
           label="Block Height"
           value={
             blockHeightValue !== null
-              ? numberFormatter.format(blockHeightValue)
+              ? (
+                  <AnimatedNumber
+                    value={blockHeightValue}
+                    format={numberFormatter}
+                  />
+                )
               : "waiting…"
           }
           isPlaceholder={blockHeightValue === null}
@@ -146,7 +170,12 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
           label="Avg Block Time"
           value={
             typeof avgBlockTimeValue === "number"
-              ? `${avgBlockTimeValue.toFixed(2)}s`
+              ? (
+                  <AnimatedNumber
+                    value={avgBlockTimeValue}
+                    format={(v) => `${v.toFixed(2)}s`}
+                  />
+                )
               : "waiting…"
           }
           helper="sliding window"
@@ -178,7 +207,7 @@ function formatNodeId(nodeId: string) {
 
 interface MetricItemProps {
   label: string;
-  value: string;
+  value: React.ReactNode;
   helper?: string;
   variant?: "default" | "success" | "danger";
   isPlaceholder?: boolean;
@@ -199,11 +228,79 @@ function MetricItem({
           isPlaceholder ? "text-placeholder" : ""
         }`}
       >
-        {label === "Leader" && value.length > 18
-          ? `${value.slice(0, 15)}…`
+        {label === "Leader" && typeof value === "string"
+          ? value.length > 18
+            ? (
+                <span
+                  key={value}
+                  className="leader-text-swap"
+                >
+                  {`${value.slice(0, 15)}…`}
+                </span>
+              )
+            : (
+                <span
+                  key={value}
+                  className="leader-text-swap"
+                >
+                  {value}
+                </span>
+              )
           : value}
       </span>
       {helper ? <span className="metric-helper">{helper}</span> : null}
     </div>
+  );
+}
+
+interface AnimatedNumberProps {
+  value: number;
+  format?: Intl.NumberFormat | ((value: number) => string);
+}
+
+function AnimatedNumber({ value, format }: AnimatedNumberProps) {
+  const prevRef = useRef<string | null>(null);
+  const formatted =
+    typeof format === "function"
+      ? format(value)
+      : format instanceof Intl.NumberFormat
+        ? format.format(value)
+        : String(value);
+  const prev = prevRef.current;
+  useEffect(() => {
+    prevRef.current = formatted;
+  }, [formatted]);
+
+  const prevChars = typeof prev === "string" ? prev.split("") : [];
+  const currChars = formatted.split("");
+  const maxLen = Math.max(prevChars.length, currChars.length);
+
+  const paddedPrev = Array.from({ length: maxLen }, (_, i) => {
+    const idx = prevChars.length - maxLen + i;
+    return idx >= 0 ? prevChars[idx] : " ";
+  });
+  const paddedCurr = Array.from({ length: maxLen }, (_, i) => {
+    const idx = currChars.length - maxLen + i;
+    return idx >= 0 ? currChars[idx] : " ";
+  });
+
+  return (
+    <span className="metric-digits">
+      {paddedCurr.map((char, index) => {
+        const prevChar = paddedPrev[index];
+        const changed = prevChar !== char;
+        const key = `${index}-${char}`;
+        return (
+          <span
+            key={key}
+            className={`metric-digit ${
+              changed ? "metric-digit-changed" : ""
+            }`}
+          >
+            {char}
+          </span>
+        );
+      })}
+    </span>
   );
 }

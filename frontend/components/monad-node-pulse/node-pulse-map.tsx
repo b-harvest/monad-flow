@@ -38,6 +38,8 @@ export function NodePulseMap() {
       >;
     }
     const now = Date.now();
+    const occupiedBuckets = new Map<string, number>();
+
     return nodes
       .filter(
         (node) =>
@@ -54,12 +56,27 @@ export function NodePulseMap() {
            lon = geo.longitude;
         }
 
-        const { x, y } = projectPoint(
+        const { x: baseX, y: baseY } = projectPoint(
           lat ?? 0,
           lon ?? 0,
           size.width,
           size.height,
         );
+        const bucketKey = `${Math.round(baseX / 10)}-${Math.round(
+          baseY / 10,
+        )}`;
+        const bucketIndex = occupiedBuckets.get(bucketKey) ?? 0;
+        occupiedBuckets.set(bucketKey, bucketIndex + 1);
+
+        const spreadCount = 6;
+        const angle =
+          bucketIndex === 0
+            ? 0
+            : (2 * Math.PI * (bucketIndex - 1)) / spreadCount;
+        const radius = bucketIndex === 0 ? 0 : 14 + (bucketIndex - 1) * 4;
+        const x = baseX + radius * Math.cos(angle);
+        const y = baseY + radius * Math.sin(angle);
+
         const last = node.lastActivity
           ? Date.parse(node.lastActivity)
           : 0;

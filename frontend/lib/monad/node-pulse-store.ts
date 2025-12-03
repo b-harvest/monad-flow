@@ -226,7 +226,17 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
 
     if (updates.size === 0) return;
 
-    const nextRecentPings = [...newPings, ...state.recentPings].slice(0, 50);
+    // Merge into a per-IP map so we always keep one
+    // latest record per IP instead of a rolling event window.
+    const pingByIp = new Map<string, (typeof newPings)[number]>();
+    state.recentPings.forEach((ping) => {
+      pingByIp.set(ping.ip, ping);
+    });
+    newPings.forEach((ping) => {
+      pingByIp.set(ping.ip, ping);
+    });
+
+    const nextRecentPings = Array.from(pingByIp.values());
 
     set({
       nodes: state.nodes.map((node) => {

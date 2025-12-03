@@ -9,8 +9,6 @@ interface CommandNavProps {
   connectionStatus: "connected" | "degraded" | "lost";
   playback: PlaybackState;
   onPlaybackChange: (patch: Partial<PlaybackState>) => void;
-  processTelemetryVisible: boolean;
-  onToggleProcessTelemetry: () => void;
   historicalLoading: boolean;
   historicalError: string | null;
   onHistoricalFetch: (range: { from: number; to: number }) => void;
@@ -66,8 +64,6 @@ export function CommandNav({
   connectionStatus,
   playback,
   onPlaybackChange,
-  processTelemetryVisible,
-  onToggleProcessTelemetry,
   historicalError,
   historicalLoading,
   onHistoricalFetch,
@@ -218,14 +214,6 @@ export function CommandNav({
             onClick={handleHistoricToggle}
             >
               {mode === "live" ? "Go Historic" : "Return Live"}
-            </button>
-            <button
-              type="button"
-              className={`status-toggle ghost ${processTelemetryVisible ? "active" : ""}`}
-              onClick={onToggleProcessTelemetry}
-              aria-pressed={processTelemetryVisible}
-            >
-              {processTelemetryVisible ? "Hide Process Panel" : "Show Process Panel"}
             </button>
           </div>
           <div className="command-playback-meta">

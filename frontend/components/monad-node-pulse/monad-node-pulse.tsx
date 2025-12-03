@@ -275,10 +275,6 @@ const MonadNodePulse = () => {
         connectionStatus={metrics.connectionStatus}
         playback={playback}
         onPlaybackChange={setPlayback}
-        processTelemetryVisible={processTelemetryVisible}
-        onToggleProcessTelemetry={() =>
-          setProcessTelemetryVisible((prev) => !prev)
-        }
         historicalLoading={historicalLoading}
         historicalError={historicalError}
         onHistoricalFetch={handleHistoricalFetch}
@@ -309,22 +305,7 @@ const MonadNodePulse = () => {
       <TransactionFeedPanel />
       <PingLatencyPanel />
       <SystemLogPanel />
-      {processTelemetryVisible && hasMounted && mapShellBounds ? (
-        createPortal(
-          <div
-            className="process-telemetry-overlay"
-            style={{
-              left: mapShellBounds.left,
-              top: mapShellBounds.top,
-              width: mapShellBounds.width,
-              height: mapShellBounds.height,
-            }}
-          >
-            <PidTelemetryPanel />
-          </div>,
-          document.body,
-        )
-      ) : null}
+      <PidTelemetryPanel />
     </div>
   );
 };

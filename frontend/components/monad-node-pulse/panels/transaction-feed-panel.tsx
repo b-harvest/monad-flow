@@ -12,6 +12,8 @@ export function TransactionFeedPanel() {
   const forwardedTxs = useNodePulseStore(
     (state) => state.forwardedTxs,
   );
+  const [displayProposalTxs, setDisplayProposalTxs] = useState<any[]>([]);
+  const [displayForwardedTxs, setDisplayForwardedTxs] = useState<ForwardedTxSummary[]>([]);
 
   useEffect(() => {
     setHydrated(true);
@@ -39,6 +41,32 @@ export function TransactionFeedPanel() {
     return forwardedTxs.slice(0, 10);
   }, [forwardedTxs]);
 
+  useEffect(() => {
+    if (!hydrated) return;
+    setDisplayProposalTxs((prev) => {
+      const prevIds = new Set(prev.map((tx) => tx._id as string));
+      const next = transactions.map((tx) => {
+        const id = tx.hash ?? `${tx.hash}-${tx.proposalRound}`;
+        const isNew = prevIds.size > 0 && !prevIds.has(id);
+        return { ...tx, _id: id, _isNew: isNew };
+      });
+      return next;
+    });
+  }, [transactions, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setDisplayForwardedTxs((prev) => {
+      const prevIds = new Set(prev.map((tx) => tx.hash));
+      const next = forwarded.map((tx) => {
+        const id = tx.hash;
+        const isNew = prevIds.size > 0 && !prevIds.has(id);
+        return { ...tx, _isNew: isNew } as ForwardedTxSummary & { _isNew?: boolean };
+      });
+      return next;
+    });
+  }, [forwarded, hydrated]);
+
   return (
     <section className="transaction-feed-panel hud-panel">
       <header className="panel-header">
@@ -49,7 +77,7 @@ export function TransactionFeedPanel() {
       <div className="system-log-strip" style={{ display: "flex", gap: "16px" }}>
         {/* Left Column: Proposal Transactions */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {!hydrated || transactions.length === 0 ? (
+          {!hydrated || displayProposalTxs.length === 0 ? (
             <div className="system-log-card">
               <span className="text-label">Proposal Transactions</span>
               <p className="pid-placeholder">Waiting for transactions…</p>
@@ -63,10 +91,12 @@ export function TransactionFeedPanel() {
                 <span className="pid-updated">Live</span>
               </div>
               <ul className="system-log-messages tx-feed-list">
-                {transactions.map((tx, idx) => (
+                {displayProposalTxs.map((tx) => (
                   <li
-                    key={`${tx.hash}-${idx}`}
-                    className="system-log-message tx-card"
+                    key={tx._id}
+                    className={`system-log-message tx-card ${
+                      tx._isNew ? "tx-card-enter" : ""
+                    }`}
                   >
                     <div className="tx-card-head">
                       <span className="tx-timestamp">
@@ -152,10 +182,12 @@ export function TransactionFeedPanel() {
               </div>
             ) : (
               <ul className="system-log-messages tx-feed-list">
-                {forwarded.map((tx, idx) => (
+                {displayForwardedTxs.map((tx, idx) => (
                   <li
                     key={`${tx.hash}-${idx}`}
-                    className="system-log-message tx-card"
+                    className={`system-log-message tx-card ${
+                      (tx as any)._isNew ? "tx-card-enter" : ""
+                    }`}
                   >
                     <div className="tx-card-head">
                       <span className="tx-timestamp">
