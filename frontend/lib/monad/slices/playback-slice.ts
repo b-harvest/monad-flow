@@ -44,7 +44,7 @@ export const createPlaybackSlice: StateCreator<PlaybackSlice> = (set) => ({
   visualEffects: [],
   playback: initialPlayback,
   alert: null,
-  lastEventTimestamp: Date.now(),
+  lastEventTimestamp: 0,
   historicalTimeline: [],
   historicalPointer: 0,
   detailDrawerOpen: false,

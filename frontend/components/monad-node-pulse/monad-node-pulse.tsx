@@ -73,6 +73,7 @@ const MonadNodePulse = () => {
   const [historicalLoading, setHistoricalLoading] = useState(false);
   const [historicalError, setHistoricalError] = useState<string | null>(null);
   const historicalControllerRef = useRef<AbortController | null>(null);
+  const MAX_HISTORICAL_WINDOW_MS = 5 * 60 * 1000;
 
   useEffect(() => {
     setHasMounted(true);
@@ -124,6 +125,10 @@ const MonadNodePulse = () => {
     const to = range.to;
     if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
       setHistoricalError("Start time must be before end time.");
+      return;
+    }
+    if (to - from > MAX_HISTORICAL_WINDOW_MS) {
+      setHistoricalError("Selected range is too large. Please choose 5 minutes or less.");
       return;
     }
     setHistoricalError(null);

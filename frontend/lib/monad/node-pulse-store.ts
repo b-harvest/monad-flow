@@ -59,6 +59,7 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
     const [set, get] = a;
     const state = get();
     const now = Date.now();
+    let latestChunkTimestamp = state.lastEventTimestamp || 0;
 
     // 0. Update IP->Pubkey map from unicast chunks
     const nextIpToPubkey = { ...state.ipToPubkey };
@@ -81,6 +82,25 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
         if (nextIpToPubkey[ip] !== payload.secp_pubkey) {
           nextIpToPubkey[ip] = payload.secp_pubkey;
           mapUpdated = true;
+        }
+      }
+
+      // Track latest chunk timestamp from payload (node time)
+      if (payload) {
+        let ts = 0;
+        if (typeof payload.timestampMs === "string") {
+          const asNum = Number(payload.timestampMs);
+          if (Number.isFinite(asNum)) {
+            ts = asNum;
+          }
+        } else if (typeof payload.timestamp === "string") {
+          const parsed = Date.parse(payload.timestamp);
+          if (!Number.isNaN(parsed)) {
+            ts = parsed;
+          }
+        }
+        if (ts > 0 && ts > latestChunkTimestamp) {
+          latestChunkTimestamp = ts;
         }
       }
     });
@@ -165,7 +185,8 @@ export const useNodePulseStore = create<NodePulseState>()((...a) => ({
       visualEffects: nextEffects,
       chunkQueue: nextChunkQueue,
       recentAppMessageHashes: limitedRecentHashes,
-      lastEventTimestamp: now,
+      lastEventTimestamp:
+        latestChunkTimestamp > 0 ? latestChunkTimestamp : now,
       ipToPubkey: mapUpdated ? nextIpToPubkey : state.ipToPubkey,
     });
   },

@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import type { PlaybackState } from "@/types/monad";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
-import { useNow } from "@/lib/hooks/use-now";
 
 interface CommandNavProps {
   connectionStatus: "connected" | "degraded" | "lost";
@@ -17,7 +16,7 @@ interface CommandNavProps {
   onHistoricalFetch: (range: { from: number; to: number }) => void;
 }
 
-const UTC_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+const NODE_TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
   minute: "2-digit",
   second: "2-digit",
@@ -52,9 +51,11 @@ export function CommandNav({
   const localIp = useNodePulseStore((state) => state.localNodeIp);
   const setLocalNodeIp = useNodePulseStore((state) => state.setLocalNodeIp);
   const ensureLocalNode = useNodePulseStore((state) => state.ensureLocalNode);
+  const lastEventTimestamp = useNodePulseStore(
+    (state) => state.lastEventTimestamp,
+  );
   const [value, setValue] = useState(localIp);
   const [mounted, setMounted] = useState(false);
-  const now = useNow(1000);
 
   useEffect(() => {
     setValue(localIp);
@@ -64,7 +65,12 @@ export function CommandNav({
     setMounted(true);
   }, []);
 
-  const nowUtc = now === null ? "—" : UTC_FORMATTER.format(new Date(now));
+  const nodeTimeLabel =
+    mounted && lastEventTimestamp > 0
+      ? NODE_TIME_FORMATTER.format(
+          new Date(lastEventTimestamp),
+        )
+      : "waiting…";
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -196,8 +202,8 @@ export function CommandNav({
             </button>
           </div>
           <div className="command-playback-meta">
-            <span className="text-label">UTC</span>
-            <span className="text-number">{nowUtc}</span>
+            <span className="text-label">Node Time</span>
+            <span className="text-number">{nodeTimeLabel}</span>
           </div>
         </div>
         <div className="command-playback-timeline">
