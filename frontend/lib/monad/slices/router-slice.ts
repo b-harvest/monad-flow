@@ -147,6 +147,8 @@ export const createRouterSlice: StateCreator<RouterSlice> = (set) => ({
     set(() => ({
       routerEvents: [],
       selectedRouterEventId: null,
+      proposalSnapshots: [],
+      forwardedTxs: [],
     })),
 
   setSelectedRouterEvent: (id) => set({ selectedRouterEventId: id }),
