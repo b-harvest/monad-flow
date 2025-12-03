@@ -24,6 +24,9 @@ export function LeaderSchedulePanel() {
   const [leaders, setLeaders] = useState<LeaderEvent[]>(
     [],
   );
+  const [displayLeaders, setDisplayLeaders] = useState<
+    LeaderEvent[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +43,7 @@ export function LeaderSchedulePanel() {
     setLoading(true);
     setError(null);
 
-    fetchLeaderSchedule(nextBase, FUTURE_RANGE)
+    fetchLeaderSchedule(nextBase, FUTURE_RANGE + 1)
       .then((events) => {
         if (cancelled) return;
         setBaseRound(nextBase);
@@ -53,7 +56,6 @@ export function LeaderSchedulePanel() {
             ? fetchError.message
             : "Failed to load leader schedule",
         );
-        setLeaders([]);
       })
       .finally(() => {
         if (!cancelled) {
@@ -66,16 +68,36 @@ export function LeaderSchedulePanel() {
     };
   }, [latestProposal, baseRound]);
 
-  const futureLeaders = useMemo(() => {
-    if (!latestProposal) {
-      return [];
+  useEffect(() => {
+    if (!latestProposal || leaders.length === 0) {
+      return;
     }
-    return leaders
-      .filter((leader) => leader.round > latestProposal.round)
-      .slice(0, FUTURE_RANGE);
+    const sorted = [...leaders].sort(
+      (a, b) => a.round - b.round,
+    );
+    const baseIndex = sorted.findIndex(
+      (leader) => leader.round === latestProposal.round,
+    );
+    let next: LeaderEvent[];
+    if (baseIndex === -1) {
+      next = sorted.filter(
+        (leader) => leader.round > latestProposal.round,
+      );
+    } else {
+      next = sorted.slice(baseIndex + 1);
+    }
+    setDisplayLeaders((prev) => {
+      if (next.length >= FUTURE_RANGE) {
+        return next.slice(0, FUTURE_RANGE);
+      }
+      if (prev.length >= FUTURE_RANGE) {
+        return prev;
+      }
+      return next;
+    });
   }, [leaders, latestProposal]);
 
-  const hasLeaders = futureLeaders.length > 0;
+  const hasLeaders = displayLeaders.length > 0;
 
   return (
     <section className="hud-panel leader-schedule-panel">
@@ -96,7 +118,7 @@ export function LeaderSchedulePanel() {
       ) : (
         <div className="leader-schedule-body">
           <ul className="leader-schedule-list">
-            {futureLeaders.map((leader, index) => (
+            {displayLeaders.map((leader, index) => (
               <li
                 key={leader._id}
                 className={`leader-schedule-item ${
