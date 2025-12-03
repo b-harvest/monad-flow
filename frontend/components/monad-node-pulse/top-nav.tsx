@@ -28,14 +28,38 @@ const SPEED_OPTIONS: PlaybackState["speed"][] = [0.25, 0.5, 1, 2, 4];
 
 const formatDatetimeLocal = (timestamp: number) => {
   if (!Number.isFinite(timestamp)) return "";
-  const date = new Date(timestamp);
-  const offsetMs = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  // Represent the underlying timestamp in UTC so that
+  // it aligns with server-side log timestamps.
+  return new Date(timestamp).toISOString().slice(0, 16);
 };
 
 const parseDatetimeLocal = (value: string, fallback: number) => {
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  // Treat the provided datetime-local string as UTC time so that
+  // the resulting timestamp matches log timestamps from the node.
+  if (!value) return fallback;
+  const [datePart, timePart] = value.split("T");
+  if (!datePart || !timePart) return fallback;
+
+  const [yearStr, monthStr, dayStr] = datePart.split("-");
+  const [hourStr, minuteStr] = timePart.split(":");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day) ||
+    !Number.isFinite(hour) ||
+    !Number.isFinite(minute)
+  ) {
+    return fallback;
+  }
+
+  const ts = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  return Number.isFinite(ts) ? ts : fallback;
 };
 
 export function CommandNav({
@@ -56,6 +80,11 @@ export function CommandNav({
   );
   const [value, setValue] = useState(localIp);
   const [mounted, setMounted] = useState(false);
+
+  const formatRangeLabel = (timestamp: number) => {
+    if (!mounted || !Number.isFinite(timestamp)) return "—";
+    return NODE_TIME_FORMATTER.format(new Date(timestamp));
+  };
 
   useEffect(() => {
     setValue(localIp);
@@ -125,11 +154,9 @@ export function CommandNav({
     setHistoricPanelOpen(false);
   };
 
-  const startLabel = mounted
-    ? new Date(range.from).toLocaleTimeString()
-    : "—";
-  const endLabel = mounted ? new Date(range.to).toLocaleTimeString() : "—";
-  const cursorLabel = mounted ? new Date(cursor).toLocaleTimeString() : "—";
+  const startLabel = formatRangeLabel(range.from);
+  const endLabel = formatRangeLabel(range.to);
+  const cursorLabel = formatRangeLabel(cursor);
 
   const statusLabel =
     connectionStatus === "connected"

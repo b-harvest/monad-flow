@@ -363,10 +363,6 @@ async function loadHistoricalLogs(
     })),
   ].sort((a, b) => a.timestamp - b.timestamp);
 
-  console.info(
-    `[HISTORICAL] Prepared ${timeline.length} events for playback`,
-  );
-
   return timeline;
 }
 
@@ -413,10 +409,9 @@ function getRouterEventHash(event: OutboundRouterEvent) {
 }
 
 function formatLocalIso(timestamp: number) {
-  const date = new Date(timestamp);
-  const offsetMs = date.getTimezoneOffset() * 60000;
-  const localDate = new Date(date.getTime() - offsetMs);
-  return localDate.toISOString().replace("Z", "");
+  // Use UTC-based ISO string (without the trailing Z) so that
+  // the query range matches the UTC timestamps stored in logs.
+  return new Date(timestamp).toISOString().replace("Z", "");
 }
 
 export default MonadNodePulse;
