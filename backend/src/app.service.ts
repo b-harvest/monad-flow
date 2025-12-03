@@ -90,8 +90,6 @@ export class AppService {
         return this.outboundRouterModel.find(query).lean().exec();
       case 'ping':
         return this.pingLatencyModel.find(query).lean().exec();
-      case 'leader':
-        return this.leaderModel.find(query).lean().exec();
 
       case 'offcpu':
         return this.offCpuModel.find(query).lean().exec();
@@ -126,7 +124,12 @@ export class AppService {
     this.logger.log(`[DB] Upserting Leader round=${data.round}`);
     return this.leaderModel.findOneAndUpdate(
       { round: data.round },
-      { $set: data },
+      {
+        $set: {
+          ...data,
+          timestamp: new Date(data.timestamp),
+        },
+      },
       {
         upsert: true,
         new: true,
@@ -159,7 +162,7 @@ export class AppService {
     const doc = new this.pingLatencyModel({
       ip: data.ip,
       rtt_ms: data.rtt_ms,
-      timestamp: data.timestamp,
+      timestamp: new Date(data.timestamp),
     });
     this.queueDocument(this.pingLatencyModel, doc);
     return doc;
