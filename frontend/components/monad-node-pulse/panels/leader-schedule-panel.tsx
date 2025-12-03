@@ -1,11 +1,81 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import { KNOWN_PEERS } from "@/lib/monad/known-peers";
 import type { LeaderEvent } from "@/lib/api/leader";
+import { fetchLeaderSchedule } from "@/lib/api/leader";
+
+const FUTURE_RANGE = 5;
 
 export function LeaderSchedulePanel() {
-  const leaders = useNodePulseStore((state) => state.leaders);
+  const proposalSnapshots = useNodePulseStore(
+    (state) => state.proposalSnapshots,
+  );
+
+  const latestProposal = useMemo(() => {
+    const count = proposalSnapshots.length;
+    return count > 0 ? proposalSnapshots[count - 1] : null;
+  }, [proposalSnapshots]);
+
+  const [baseRound, setBaseRound] = useState<number | null>(
+    null,
+  );
+  const [leaders, setLeaders] = useState<LeaderEvent[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!latestProposal) {
+      return;
+    }
+    const nextBase = latestProposal.round;
+    if (baseRound !== null && baseRound === nextBase) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetchLeaderSchedule(nextBase, FUTURE_RANGE)
+      .then((events) => {
+        if (cancelled) return;
+        setBaseRound(nextBase);
+        setLeaders(events);
+      })
+      .catch((fetchError: unknown) => {
+        if (cancelled) return;
+        setError(
+          fetchError instanceof Error
+            ? fetchError.message
+            : "Failed to load leader schedule",
+        );
+        setLeaders([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [latestProposal, baseRound]);
+
+  const futureLeaders = useMemo(() => {
+    if (!latestProposal) {
+      return [];
+    }
+    return leaders
+      .filter((leader) => leader.round > latestProposal.round)
+      .slice(0, FUTURE_RANGE);
+  }, [leaders, latestProposal]);
+
+  const hasLeaders = futureLeaders.length > 0;
 
   return (
     <section className="hud-panel leader-schedule-panel">
@@ -14,15 +84,19 @@ export function LeaderSchedulePanel() {
           <span className="text-label">Leader Schedule</span>
         </div>
       </header>
-      {leaders.length === 0 ? (
+      {!hasLeaders ? (
         <div className="leader-schedule-empty">
           <span className="text-label">Leader Schedule</span>
-          <p className="pid-placeholder">Waiting for schedule…</p>
+          <p className="pid-placeholder">
+            {loading
+              ? "Loading next leaders…"
+              : error ?? "Waiting for proposal…"}
+          </p>
         </div>
       ) : (
         <div className="leader-schedule-body">
           <ul className="leader-schedule-list">
-            {[...leaders].reverse().map((leader, index) => (
+            {futureLeaders.map((leader, index) => (
               <li
                 key={leader._id}
                 className={`leader-schedule-item ${
@@ -30,13 +104,17 @@ export function LeaderSchedulePanel() {
                 }`}
               >
                 <div className="leader-round">
-                  <span className="leader-round-label">Round</span>
+                  <span className="leader-round-label">
+                    Round
+                  </span>
                   <span className="leader-round-value">
                     {leader.round.toLocaleString()}
                   </span>
                 </div>
                 <div className="leader-node">
-                  <span className="leader-node-label">Leader</span>
+                  <span className="leader-node-label">
+                    Leader
+                  </span>
                   <span
                     className="leader-node-id"
                     title={leader.node_id}
@@ -57,7 +135,9 @@ function getLeaderDisplayName(leader: LeaderEvent): string {
   const rawId = leader.node_id.startsWith("0x")
     ? leader.node_id.slice(2)
     : leader.node_id;
-  const known = KNOWN_PEERS[rawId] as { name?: string } | undefined;
+  const known = KNOWN_PEERS[rawId] as
+    | { name?: string }
+    | undefined;
   if (known && typeof known.name === "string" && known.name.length > 0) {
     return known.name;
   }
