@@ -22,7 +22,7 @@ export function TransactionFeedPanel() {
   const transactions = useMemo(() => {
     if (!proposalSnapshots || proposalSnapshots.length === 0) return [];
 
-    // Flatten transactions from all snapshots and take the latest 50
+    // Flatten transactions from all snapshots
     const allTxs = proposalSnapshots.flatMap((snapshot) => {
       return (snapshot.transactions || []).map((tx) => ({
         ...tx,
@@ -31,14 +31,38 @@ export function TransactionFeedPanel() {
       }));
     });
 
-    // Sort by timestamp descending (assuming proposal order is roughly chronological)
-    // Since we flatMap from snapshots which are likely ordered, we can just reverse
-    return allTxs.reverse().slice(0, 10);
+    // Sort by timestamp descending (latest first)
+    const sorted = allTxs
+      .filter((tx) => typeof tx.hash === "string" && tx.hash.length > 0)
+      .sort(
+        (a, b) =>
+          (b.proposalTimestamp ?? 0) - (a.proposalTimestamp ?? 0),
+      );
+
+    // Deduplicate by hash: keep the latest entry for each hash
+    const seen = new Set<string>();
+    const unique: any[] = [];
+    for (const tx of sorted) {
+      if (!tx.hash || seen.has(tx.hash)) continue;
+      seen.add(tx.hash);
+      unique.push(tx);
+      if (unique.length >= 10) break;
+    }
+
+    return unique;
   }, [proposalSnapshots]);
 
   const forwarded = useMemo<ForwardedTxSummary[]>(() => {
     if (!forwardedTxs || forwardedTxs.length === 0) return [];
-    return forwardedTxs.slice(0, 10);
+    const seen = new Set<string>();
+    const unique: ForwardedTxSummary[] = [];
+    for (const tx of forwardedTxs) {
+      if (!tx.hash || seen.has(tx.hash)) continue;
+      seen.add(tx.hash);
+      unique.push(tx);
+      if (unique.length >= 10) break;
+    }
+    return unique;
   }, [forwardedTxs]);
 
   useEffect(() => {
@@ -46,7 +70,7 @@ export function TransactionFeedPanel() {
     setDisplayProposalTxs((prev) => {
       const prevIds = new Set(prev.map((tx) => tx._id as string));
       const next = transactions.map((tx) => {
-        const id = tx.hash ?? `${tx.hash}-${tx.proposalRound}`;
+        const id = tx.hash;
         const isNew = prevIds.size > 0 && !prevIds.has(id);
         return { ...tx, _id: id, _isNew: isNew };
       });
@@ -182,9 +206,9 @@ export function TransactionFeedPanel() {
               </div>
             ) : (
               <ul className="system-log-messages tx-feed-list">
-                {displayForwardedTxs.map((tx, idx) => (
+                {displayForwardedTxs.map((tx) => (
                   <li
-                    key={`${tx.hash}-${idx}`}
+                    key={tx.hash}
                     className={`system-log-message tx-card ${
                       (tx as any)._isNew ? "tx-card-enter" : ""
                     }`}
