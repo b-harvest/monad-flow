@@ -22,6 +22,13 @@ import { PingLatencyPanel } from "./panels/ping-latency-panel";
 import { CommandNav } from "./top-nav";
 import type { MonadChunkEvent } from "@/lib/api/monad-chunk";
 import type { OutboundRouterEvent } from "@/lib/api/outbound-router";
+import type { PingLatencyEvent } from "@/lib/api/ping-latency";
+import type { BpfTraceEvent } from "@/lib/api/bpf-trace";
+import type { SystemLogEvent } from "@/lib/api/system-log";
+import type { OffCpuEvent } from "@/lib/api/off-cpu";
+import type { SchedulerEvent } from "@/lib/api/scheduler";
+import type { PerfStatEvent } from "@/lib/api/perf-stat";
+import type { TurboStatEvent } from "@/lib/api/turbo-stat";
 import type { HistoricalEvent, PlaybackState } from "@/types/monad";
 import { prepareChunkData } from "@/lib/monad/chunk-event-handler";
 import { hydrateOutboundRouterEvent } from "@/lib/monad/hydrate-outbound-router-event";
@@ -186,10 +193,36 @@ const MonadNodePulse = () => {
           localId,
         );
         state.batchIngestChunks([prepared]);
-      } else {
+      } else if (entry.type === "router") {
         hydrateOutboundRouterEvent(entry.payload)
           .then((hydrated) => ingestRouterEvent(hydrated))
           .catch(() => ingestRouterEvent(entry.payload));
+      } else if (entry.type === "ping") {
+        const state = useNodePulseStore.getState();
+        const payload = entry.payload as PingLatencyEvent;
+        if (payload.ip && typeof payload.rtt_ms === "number") {
+          state.batchIngestPings([
+            { ip: payload.ip, rtt_ms: payload.rtt_ms },
+          ]);
+        }
+      } else if (entry.type === "bpf") {
+        const state = useNodePulseStore.getState();
+        state.pushBpfTraceEvent(entry.payload as BpfTraceEvent);
+      } else if (entry.type === "system") {
+        const state = useNodePulseStore.getState();
+        state.pushSystemLogEvent(entry.payload as SystemLogEvent);
+      } else if (entry.type === "offcpu") {
+        const state = useNodePulseStore.getState();
+        state.pushOffCpuEvent(entry.payload as OffCpuEvent);
+      } else if (entry.type === "scheduler") {
+        const state = useNodePulseStore.getState();
+        state.pushSchedulerEvent(entry.payload as SchedulerEvent);
+      } else if (entry.type === "perf") {
+        const state = useNodePulseStore.getState();
+        state.pushPerfStatEvent(entry.payload as PerfStatEvent);
+      } else if (entry.type === "turbo") {
+        const state = useNodePulseStore.getState();
+        state.pushTurboStatEvent(entry.payload as TurboStatEvent);
       }
       nextIndex += 1;
     }
@@ -307,7 +340,18 @@ async function loadHistoricalLogs(
   const fromIso = formatLocalIso(range.from);
   const toIso = formatLocalIso(range.to);
 
-  const [chunkResponse, routerResponse] = await Promise.all([
+  const [
+    chunkResponse,
+    routerResponse,
+    pingResponse,
+    bpfResponse,
+    offcpuResponse,
+    schedulerResponse,
+    perfResponse,
+    turboResponse,
+    bftResponse,
+    execResponse,
+  ] = await Promise.all([
     fetch(
       `${baseUrl}/api/logs/chunk?from=${encodeURIComponent(
         fromIso,
@@ -320,6 +364,54 @@ async function loadHistoricalLogs(
       )}&to=${encodeURIComponent(toIso)}`,
       { signal: controller.signal, cache: "no-store" },
     ),
+    fetch(
+      `${baseUrl}/api/logs/ping?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
+    fetch(
+      `${baseUrl}/api/logs/bpf?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
+    fetch(
+      `${baseUrl}/api/logs/offcpu?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
+    fetch(
+      `${baseUrl}/api/logs/scheduler?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
+    fetch(
+      `${baseUrl}/api/logs/perf?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
+    fetch(
+      `${baseUrl}/api/logs/turbo?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
+    fetch(
+      `${baseUrl}/api/logs/bft?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
+    fetch(
+      `${baseUrl}/api/logs/exec?from=${encodeURIComponent(
+        fromIso,
+      )}&to=${encodeURIComponent(toIso)}`,
+      { signal: controller.signal, cache: "no-store" },
+    ),
   ]);
 
   if (!chunkResponse.ok) {
@@ -328,12 +420,57 @@ async function loadHistoricalLogs(
   if (!routerResponse.ok) {
     throw new Error(`Failed to load router logs (${routerResponse.status})`);
   }
+  if (!pingResponse.ok) {
+    throw new Error(`Failed to load ping logs (${pingResponse.status})`);
+  }
+  if (!bpfResponse.ok) {
+    throw new Error(`Failed to load bpf logs (${bpfResponse.status})`);
+  }
+  if (!offcpuResponse.ok) {
+    throw new Error(`Failed to load offcpu logs (${offcpuResponse.status})`);
+  }
+  if (!schedulerResponse.ok) {
+    throw new Error(
+      `Failed to load scheduler logs (${schedulerResponse.status})`,
+    );
+  }
+  if (!perfResponse.ok) {
+    throw new Error(`Failed to load perf logs (${perfResponse.status})`);
+  }
+  if (!turboResponse.ok) {
+    throw new Error(`Failed to load turbo logs (${turboResponse.status})`);
+  }
+  if (!bftResponse.ok) {
+    throw new Error(`Failed to load bft logs (${bftResponse.status})`);
+  }
+  if (!execResponse.ok) {
+    throw new Error(`Failed to load exec logs (${execResponse.status})`);
+  }
 
   const chunkLogs = (await chunkResponse.json()) as unknown;
   const routerLogs = (await routerResponse.json()) as unknown;
+  const pingLogs = (await pingResponse.json()) as unknown;
+  const bpfLogs = (await bpfResponse.json()) as unknown;
+  const offcpuLogs = (await offcpuResponse.json()) as unknown;
+  const schedulerLogs = (await schedulerResponse.json()) as unknown;
+  const perfLogs = (await perfResponse.json()) as unknown;
+  const turboLogs = (await turboResponse.json()) as unknown;
+  const bftLogs = (await bftResponse.json()) as unknown;
+  const execLogs = (await execResponse.json()) as unknown;
 
-  if (!Array.isArray(chunkLogs) || !Array.isArray(routerLogs)) {
-    throw new Error("Unexpected historical payload");
+  if (
+    !Array.isArray(chunkLogs) ||
+    !Array.isArray(routerLogs) ||
+    !Array.isArray(pingLogs) ||
+    !Array.isArray(bpfLogs) ||
+    !Array.isArray(offcpuLogs) ||
+    !Array.isArray(schedulerLogs) ||
+    !Array.isArray(perfLogs) ||
+    !Array.isArray(turboLogs) ||
+    !Array.isArray(bftLogs) ||
+    !Array.isArray(execLogs)
+  ) {
+    throw new Error("Unexpected historical payload shape");
   }
 
   const sortedChunks = [...chunkLogs]
@@ -350,6 +487,56 @@ async function loadHistoricalLogs(
     }))
     .sort((a, b) => a.timestamp - b.timestamp);
 
+  const sortedPings = [...pingLogs]
+    .map((entry) => ({
+      timestamp: parseTimestamp((entry as any).timestamp),
+      payload: entry as PingLatencyEvent,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const sortedBpf = [...bpfLogs]
+    .map((entry) => ({
+      timestamp: parseTimestamp((entry as any).timestamp),
+      payload: entry as BpfTraceEvent,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const mergedSystemLogs = [...bftLogs, ...execLogs];
+  const sortedSystem = [...mergedSystemLogs]
+    .map((entry) => ({
+      timestamp: parseTimestamp((entry as any).timestamp),
+      payload: entry as SystemLogEvent,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const sortedOffcpu = [...offcpuLogs]
+    .map((entry) => ({
+      timestamp: parseTimestamp((entry as any).timestamp),
+      payload: entry as OffCpuEvent,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const sortedScheduler = [...schedulerLogs]
+    .map((entry) => ({
+      timestamp: parseTimestamp((entry as any).timestamp),
+      payload: entry as SchedulerEvent,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const sortedPerf = [...perfLogs]
+    .map((entry) => ({
+      timestamp: parseTimestamp((entry as any).timestamp),
+      payload: entry as PerfStatEvent,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const sortedTurbo = [...turboLogs]
+    .map((entry) => ({
+      timestamp: parseTimestamp((entry as any).timestamp),
+      payload: entry as TurboStatEvent,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
   const timeline = [
     ...sortedChunks.map((item) => ({
       type: "chunk" as const,
@@ -358,6 +545,41 @@ async function loadHistoricalLogs(
     })),
     ...sortedRouter.map((item) => ({
       type: "router" as const,
+      timestamp: item.timestamp,
+      payload: item.payload,
+    })),
+    ...sortedPings.map((item) => ({
+      type: "ping" as const,
+      timestamp: item.timestamp,
+      payload: item.payload,
+    })),
+    ...sortedBpf.map((item) => ({
+      type: "bpf" as const,
+      timestamp: item.timestamp,
+      payload: item.payload,
+    })),
+    ...sortedSystem.map((item) => ({
+      type: "system" as const,
+      timestamp: item.timestamp,
+      payload: item.payload,
+    })),
+    ...sortedOffcpu.map((item) => ({
+      type: "offcpu" as const,
+      timestamp: item.timestamp,
+      payload: item.payload,
+    })),
+    ...sortedScheduler.map((item) => ({
+      type: "scheduler" as const,
+      timestamp: item.timestamp,
+      payload: item.payload,
+    })),
+    ...sortedPerf.map((item) => ({
+      type: "perf" as const,
+      timestamp: item.timestamp,
+      payload: item.payload,
+    })),
+    ...sortedTurbo.map((item) => ({
+      type: "turbo" as const,
       timestamp: item.timestamp,
       payload: item.payload,
     })),

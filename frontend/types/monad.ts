@@ -1,5 +1,12 @@
 import type { MonadChunkEvent } from "@/lib/api/monad-chunk";
 import type { OutboundRouterEvent } from "@/lib/api/outbound-router";
+import type { PingLatencyEvent } from "@/lib/api/ping-latency";
+import type { BpfTraceEvent } from "@/lib/api/bpf-trace";
+import type { SystemLogEvent } from "@/lib/api/system-log";
+import type { OffCpuEvent } from "@/lib/api/off-cpu";
+import type { SchedulerEvent } from "@/lib/api/scheduler";
+import type { PerfStatEvent } from "@/lib/api/perf-stat";
+import type { TurboStatEvent } from "@/lib/api/turbo-stat";
 
 export type MonadNodeState = "leader" | "active" | "idle" | "failed" | "syncing";
 
@@ -160,4 +167,39 @@ export type HistoricalEvent =
       type: "router";
       timestamp: number;
       payload: OutboundRouterEvent;
+    }
+  | {
+      type: "ping";
+      timestamp: number;
+      payload: PingLatencyEvent;
+    }
+  | {
+      type: "bpf";
+      timestamp: number;
+      payload: BpfTraceEvent;
+    }
+  | {
+      type: "system";
+      timestamp: number;
+      payload: SystemLogEvent;
+    }
+  | {
+      type: "offcpu";
+      timestamp: number;
+      payload: OffCpuEvent;
+    }
+  | {
+      type: "scheduler";
+      timestamp: number;
+      payload: SchedulerEvent;
+    }
+  | {
+      type: "perf";
+      timestamp: number;
+      payload: PerfStatEvent;
+    }
+  | {
+      type: "turbo";
+      timestamp: number;
+      payload: TurboStatEvent;
     };
