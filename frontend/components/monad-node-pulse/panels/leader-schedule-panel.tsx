@@ -12,6 +12,9 @@ export function LeaderSchedulePanel() {
   const proposalSnapshots = useNodePulseStore(
     (state) => state.proposalSnapshots,
   );
+  const setLeaderSchedule = useNodePulseStore(
+    (state) => state.setLeaderSchedule,
+  );
 
   const latestProposal = useMemo(() => {
     const count = proposalSnapshots.length;
@@ -43,11 +46,12 @@ export function LeaderSchedulePanel() {
     setLoading(true);
     setError(null);
 
-    fetchLeaderSchedule(nextBase, FUTURE_RANGE + 1)
+    fetchLeaderSchedule(nextBase, FUTURE_RANGE)
       .then((events) => {
         if (cancelled) return;
         setBaseRound(nextBase);
         setLeaders(events);
+        setLeaderSchedule(nextBase, events);
       })
       .catch((fetchError: unknown) => {
         if (cancelled) return;

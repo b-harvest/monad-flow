@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import type { ConsensusMetrics, MonadNode } from "@/types/monad";
-import type { ProposalSnapshot } from "@/lib/monad/normalize-proposal";
 import { KNOWN_PEERS } from "@/lib/monad/known-peers";
-import type { LeaderEvent } from "@/lib/api/leader";
-import { fetchLeaderSchedule } from "@/lib/api/leader";
 
 interface MetricsPanelProps {
   metrics: ConsensusMetrics;
@@ -16,12 +13,9 @@ interface MetricsPanelProps {
 const numberFormatter = new Intl.NumberFormat("en-US");
 
 export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
-  const leaderNode = nodes.find((node) => node.id === metrics.leaderId);
   const proposalSnapshots = useNodePulseStore(
     (state) => state.proposalSnapshots,
   );
-  const [currentLeaderEvent, setCurrentLeaderEvent] =
-    useState<LeaderEvent | null>(null);
 
   const { latestProposal, previousProposal } = useMemo(() => {
     const count = proposalSnapshots.length;
@@ -31,41 +25,11 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
     };
   }, [proposalSnapshots]);
 
-  useEffect(() => {
-    if (!latestProposal) {
-      setCurrentLeaderEvent(null);
-      return;
-    }
-    const baseRound = latestProposal.round;
-    let cancelled = false;
-
-    fetchLeaderSchedule(baseRound, 5)
-      .then((events) => {
-        if (cancelled) return;
-        const current =
-          events.find(
-            (event) => event.round === baseRound,
-          ) ?? null;
-        setCurrentLeaderEvent(current);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setCurrentLeaderEvent(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [latestProposal]);
-
   const roundValue = latestProposal ? latestProposal.round : null;
   const epochValue = latestProposal ? latestProposal.epoch : null;
   const leaderValue =
-    (currentLeaderEvent &&
-      getLeaderNameFromEvent(currentLeaderEvent)) ??
-    latestProposal?.author ??
-    leaderNode?.name ??
-    null;
+    getLeaderNameFromAuthor(latestProposal?.author) ??
+    (latestProposal?.author ?? null);
   const blockHeightValue = latestProposal ? latestProposal.seqNum : null;
 
   const blockDeltaNs =
@@ -186,23 +150,95 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
   );
 }
 
-function getLeaderNameFromEvent(event: LeaderEvent): string {
-  const rawId = event.node_id.startsWith("0x")
-    ? event.node_id.slice(2)
-    : event.node_id;
-  const known = KNOWN_PEERS[rawId] as
-    | { name?: string }
-    | undefined;
+function tryDecodeAuthorToHex(author: string): string | null {
+  let value = author.trim();
+  if (!value) return null;
+
+  // 1) Base64 / base64url 문자열 시도 (예: "A3Wc0tBomfecW4+cMSC1A55WlUPrclXASX7Vm8BIJ2wm")
+  //    => 33바이트 압축 pubkey -> 66자리 hex
+  try {
+    // base64url 변형도 허용
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+    // 패딩 없으면 추가 시도
+    const padded =
+      normalized.length % 4 === 0
+        ? normalized
+        : normalized + "=".repeat(4 - (normalized.length % 4));
+    if (/^[0-9A-Za-z+/=]+$/.test(padded)) {
+      const binary =
+        typeof atob === "function" ? atob(padded) : null;
+      if (binary) {
+        let hex = "";
+        for (let i = 0; i < binary.length; i += 1) {
+          const byte = binary.charCodeAt(i);
+          if (byte < 0 || byte > 255) {
+            hex = "";
+            break;
+          }
+          hex += byte.toString(16).padStart(2, "0");
+        }
+        if (hex && hex.length >= 64) {
+          return hex.toLowerCase();
+        }
+      }
+    }
+  } catch {
+    // base64 decode 실패는 무시하고 다른 포맷 시도
+  }
+
+  if (value.startsWith("0x") || value.startsWith("0X")) {
+    const hex = value.slice(2);
+    if (/^[0-9a-fA-F]+$/.test(hex)) {
+      return hex.toLowerCase();
+    }
+  }
+
+  if (value.startsWith("[") && value.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        const parts = parsed.map((b) => {
+          if (
+            typeof b === "number" &&
+            Number.isInteger(b) &&
+            b >= 0 &&
+            b <= 255
+          ) {
+            return b.toString(16).padStart(2, "0");
+          }
+          return null;
+        });
+        if (parts.every((p) => p !== null)) {
+          return (parts as string[]).join("").toLowerCase();
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (/^[0-9a-fA-F]+$/.test(value)) {
+    return value.toLowerCase();
+  }
+
+  return null;
+}
+
+function getLeaderNameFromAuthor(author: string | undefined): string | null {
+  if (!author) return null;
+  const hex = tryDecodeAuthorToHex(author);
+  if (!hex) return null;
+  const known = KNOWN_PEERS[hex] as { name?: string } | undefined;
   if (known && typeof known.name === "string" && known.name.length > 0) {
     return known.name;
   }
-  return formatNodeId(event.node_id);
+  return formatNodeId(`0x${hex}`);
 }
 
-function formatNodeId(nodeId: string) {
-  if (!nodeId) return "—";
-  if (nodeId.length <= 18) return nodeId;
-  return `${nodeId.slice(0, 10)}…${nodeId.slice(-6)}`;
+function formatNodeId(id: string) {
+  if (!id) return "—";
+  if (id.length <= 18) return id;
+  return `${id.slice(0, 10)}…${id.slice(-6)}`;
 }
 
 interface MetricItemProps {

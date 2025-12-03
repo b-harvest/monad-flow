@@ -95,7 +95,7 @@ export function TransactionFeedPanel() {
                   <li
                     key={tx._id}
                     className={`system-log-message tx-card ${
-                      tx._isNew ? "tx-card-enter" : ""
+                      tx._isNew ? "tx-card-enter-down" : ""
                     }`}
                   >
                     <div className="tx-card-head">
