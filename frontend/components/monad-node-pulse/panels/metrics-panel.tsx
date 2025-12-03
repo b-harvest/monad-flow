@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNodePulseStore } from "@/lib/monad/node-pulse-store";
 import type { ConsensusMetrics, MonadNode } from "@/types/monad";
 import type { ProposalSnapshot } from "@/lib/monad/normalize-proposal";
+import { KNOWN_PEERS } from "@/lib/monad/known-peers";
+import type { LeaderEvent } from "@/lib/api/leader";
+import { fetchLeaderSchedule } from "@/lib/api/leader";
 
 interface MetricsPanelProps {
   metrics: ConsensusMetrics;
@@ -17,7 +20,8 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
   const proposalSnapshots = useNodePulseStore(
     (state) => state.proposalSnapshots,
   );
-  const leaders = useNodePulseStore((state) => state.leaders);
+  const [currentLeaderEvent, setCurrentLeaderEvent] =
+    useState<LeaderEvent | null>(null);
 
   const { latestProposal, previousProposal } = useMemo(() => {
     const count = proposalSnapshots.length;
@@ -27,9 +31,41 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
     };
   }, [proposalSnapshots]);
 
+  useEffect(() => {
+    if (!latestProposal) {
+      setCurrentLeaderEvent(null);
+      return;
+    }
+    const baseRound = latestProposal.round;
+    let cancelled = false;
+
+    fetchLeaderSchedule(baseRound, 5)
+      .then((events) => {
+        if (cancelled) return;
+        const current =
+          events.find(
+            (event) => event.round === baseRound,
+          ) ?? null;
+        setCurrentLeaderEvent(current);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCurrentLeaderEvent(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [latestProposal]);
+
   const roundValue = latestProposal ? latestProposal.round : null;
   const epochValue = latestProposal ? latestProposal.epoch : null;
-  const leaderValue = latestProposal?.author ?? leaderNode?.name ?? null;
+  const leaderValue =
+    (currentLeaderEvent &&
+      getLeaderNameFromEvent(currentLeaderEvent)) ??
+    latestProposal?.author ??
+    leaderNode?.name ??
+    null;
   const blockHeightValue = latestProposal ? latestProposal.seqNum : null;
 
   const blockDeltaNs =
@@ -119,6 +155,25 @@ export function MetricsPanel({ metrics, nodes }: MetricsPanelProps) {
       </div>
     </section>
   );
+}
+
+function getLeaderNameFromEvent(event: LeaderEvent): string {
+  const rawId = event.node_id.startsWith("0x")
+    ? event.node_id.slice(2)
+    : event.node_id;
+  const known = KNOWN_PEERS[rawId] as
+    | { name?: string }
+    | undefined;
+  if (known && typeof known.name === "string" && known.name.length > 0) {
+    return known.name;
+  }
+  return formatNodeId(event.node_id);
+}
+
+function formatNodeId(nodeId: string) {
+  if (!nodeId) return "—";
+  if (nodeId.length <= 18) return nodeId;
+  return `${nodeId.slice(0, 10)}…${nodeId.slice(-6)}`;
 }
 
 interface MetricItemProps {
