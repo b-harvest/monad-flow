@@ -1,5 +1,42 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+---
+
+## Creating `known-peer.ts`
+
+The frontend keeps the list of monitored Monad peers (validators / nodes) in `known-peers.ts`.
+
+- Location: `frontend/lib/monad/known-peers.ts`
+- Format: a simple `Record<string, object>` mapping peer IDs to metadata (name, logo, description, website, etc.).
+
+### 1. Generate validator metadata
+
+Clone the public validator metadata repository and generate a merged JSON file:
+
+```bash
+git clone https://github.com/monad-developers/validator-info
+
+jq -s 'map({(.secp): {name: .name, logo: .logo, description: .description, website: .website}}) | add' \
+  ./validator-info/testnet/*.json > validators.json
+```
+
+This will produce a `validators.json` file in the current directory with a mapping from validator key (`.secp`) to metadata.
+
+### 2. Create `known-peers.ts`
+
+Create the file `frontend/lib/monad/known-peers.ts` and populate it using the generated data:
+
+```ts
+// frontend/lib/monad/known-peers.ts
+
+// This is an example shape; adapt fields as needed.
+export const KNOWN_PEERS: Record<string, object> = {
+  // Paste or transform entries based on validators.json
+};
+```
+
+---
+
 ## Getting Started
 
 First, run the development server:

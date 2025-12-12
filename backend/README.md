@@ -23,75 +23,92 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Monad Flow backend service built with NestJS. It ingests metrics and traces from the sidecars (network/system) and exposes APIs for the frontend.
 
-## Project setup
+---
 
-```bash
-$ npm install
+## 1. MongoDB & Docker Compose
+
+The backend requires a MongoDB instance. Before starting MongoDB with Docker Compose, you must define the required environment variables.
+
+### 1.1 Environment variables
+
+Define the following environment variables in a `.env` file at the **backend project root** (or in your deployment environment):
+
+```
+MONGO_ROOT_USERNAME=root
+MONGO_ROOT_PASSWORD=<password>
+MONGO_DATABASE=<database-name>
 ```
 
-## Compile and run the project
+- `MONGO_ROOT_USERNAME` / `MONGO_ROOT_PASSWORD`: credentials for the MongoDB root user.
+- `MONGO_DATABASE`: default database used by the backend.
+
+These values must be set as environment variables (for example via a `.env` file, `export` in your shell, or your process manager configuration) **before** you start MongoDB with Docker Compose and run the backend.
+
+### 1.2 Start MongoDB with Docker Compose
+
+From the `backend` directory:
 
 ```bash
+cd backend
+docker compose up -d
+```
+
+This will start MongoDB (and any other services defined in `docker-compose.yml`) in the background.
+
+---
+
+## 2. Project setup
+
+Install dependencies:
+
+```bash
+cd backend
+npm install
+```
+
+---
+
+## 3. Build & run
+
+### 3.1 Build
+
+```bash
+cd backend
+npm run build
+```
+
+### 3.2 Run with Node
+
+```bash
+cd backend
+
 # development
-$ npm run start
+npm run start
 
 # watch mode
-$ npm run start:dev
+npm run start:dev
 
-# production mode
-$ npm run start:prod
+# production mode (compiled)
+npm run start:prod
 ```
 
-## Run tests
+### 3.3 Run with PM2
+
+To run the backend as a managed process using PM2:
 
 ```bash
-# unit tests
-$ npm run test
+# install pm2 globally (once)
+npm install -g pm2
 
-# e2e tests
-$ npm run test:e2e
+cd backend
 
-# test coverage
-$ npm run test:cov
+# production run using the compiled dist/main.js
+pm2 start dist/main.js --name monad-flow-backend
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
 ## License
 
